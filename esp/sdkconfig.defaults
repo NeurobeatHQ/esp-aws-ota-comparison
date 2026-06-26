@@ -1,0 +1,51 @@
+# ============================================================================
+#  sdkconfig.defaults — all Kconfig set here (no menuconfig needed).
+#  Pure ESP-IDF 5.3.x. Pulled in automatically by the PlatformIO espidf builder.
+# ============================================================================
+
+# --- Flash size + custom partition table ------------------------------------
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# --- Anti-brick OTA rollback -------------------------------------------------
+# The bootloader marks a freshly-activated OTA image PENDING_VERIFY and rolls
+# back to the previous slot unless the app calls
+# esp_ota_mark_app_valid_cancel_rollback() (see src/self_test.c).
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+# Keep the bootloader RTC watchdog ON across the trial boot; we additionally arm
+# the Task WDT around the self-test (belt and suspenders).
+CONFIG_BOOTLOADER_WDT_ENABLE=y
+
+# --- mbedTLS threading -------------------------------------------------------
+# On IDF 5.3.x the defaults are THREADING_C=n / THREADING_ALT=y, which races when
+# coreMQTT (MQTT task) and the OTA download share one esp-tls/mbedTLS context.
+# Force pthread-backed locking.
+CONFIG_MBEDTLS_THREADING_C=y
+CONFIG_MBEDTLS_THREADING_ALT=n
+CONFIG_MBEDTLS_THREADING_PTHREAD=y
+CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT=8192
+
+# --- TLS: client-only, AWS uses RSA-2048 server / P-256 code-sign ------------
+CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
+CONFIG_MBEDTLS_SSL_VARIABLE_BUFFER_LENGTH=y
+
+# --- Task watchdog: we drive it manually during the self-test ----------------
+CONFIG_ESP_TASK_WDT_INIT=n
+
+# --- Stacks / main task ------------------------------------------------------
+# app_main drives the initial TLS handshake (mbedTLS RSA/ECDHE verify is
+# stack-heavy), so give it room.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+CONFIG_FREERTOS_HZ=1000
+
+# --- Logging -----------------------------------------------------------------
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
+
+# --- Coredump to flash partition (debugging rollbacks) -----------------------
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+
+# --- Newlib: nano printf keeps the binary inside a 1.56 MB slot --------------
+CONFIG_NEWLIB_NANO_FORMAT=y

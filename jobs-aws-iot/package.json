@@ -1,0 +1,24 @@
+{
+  "name": "esp32-ota-poc-aws-iot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AWS IoT Core resources (CDK) for the ESP32-S3 Modular OTA POC",
+  "bin": { "ota": "bin/app.js" },
+  "scripts": {
+    "build": "tsc",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy",
+    "destroy": "cdk destroy"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "aws-cdk": "^2.130.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.130.0",
+    "constructs": "^10.3.0",
+    "source-map-support": "^0.5.21"
+  }
+}

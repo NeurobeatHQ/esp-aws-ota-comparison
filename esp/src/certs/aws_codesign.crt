@@ -1,0 +1,12 @@
+-----BEGIN CERTIFICATE-----
+PLACEHOLDER — REPLACE WITH YOUR AWS SIGNER CODE-SIGNING CERTIFICATE (PUBLIC).
+
+This is the PUBLIC code-signing certificate (ECDSA P-256) whose private key the
+AWS Signer profile uses to sign OTA images. The OTA PAL verifies each downloaded
+image's "sig-sha256-ecdsa" signature against this cert before activating it.
+
+Generate it with aws-iot/scripts/make-codesign-cert.sh and copy ecdsasigner.crt
+here. This one is public (not a secret), but it MUST match the Signer profile
+you push OTA updates with, or signature verification fails and the job is
+rejected.
+-----END CERTIFICATE-----

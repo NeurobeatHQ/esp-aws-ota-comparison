@@ -1,0 +1,4 @@
+[submodule "esp/components/esp-aws-iot"]
+	path = esp/components/esp-aws-iot
+	url = https://github.com/espressif/esp-aws-iot
+	branch = release/202406.05-LTS

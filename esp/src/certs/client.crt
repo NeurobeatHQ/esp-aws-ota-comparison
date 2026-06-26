@@ -1,0 +1,10 @@
+-----BEGIN CERTIFICATE-----
+PLACEHOLDER — REPLACE WITH YOUR AWS IoT DEVICE CERTIFICATE.
+
+This file is embedded into the firmware (EMBED_TXTFILES) as the mutual-TLS
+client certificate. Overwrite it with the certificate you registered for the
+Thing (see ../../README.md and ../../../aws-iot/README.md), e.g. the
+certificate.pem.crt returned by `aws iot create-keys-and-certificate`.
+
+Do NOT commit a real device certificate/key to a shared repo.
+-----END CERTIFICATE-----

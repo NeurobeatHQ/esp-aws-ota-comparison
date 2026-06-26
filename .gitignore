@@ -1,0 +1,6 @@
+# OS / editor
+.DS_Store
+*.swp
+*~
+
+# Per-directory build output is ignored in esp/.gitignore and aws-iot/.gitignore.
