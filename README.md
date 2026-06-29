@@ -1,9 +1,8 @@
 # ESP32-S3 · AWS IoT Core · Rollback-safe OTA (POC)
 
-A working proof-of-concept for **secure, rollback-safe Over-The-Air updates** on
-an **ESP32-S3** (Adafruit Feather), using the **AWS-managed stack**: AWS IoT
-**Jobs** + the **MQTT File Streams** OTA libraries + **coreMQTT** over mutual TLS,
-on **pure ESP-IDF 5.3.x** (PlatformIO, `framework = espidf` — no Arduino).
+Rollback-safe OTA on an ESP32-S3 (Adafruit Feather) using the AWS-managed stack —
+AWS IoT Jobs + MQTT File Streams + coreMQTT over mutual TLS — on pure ESP-IDF 5.3.x
+(PlatformIO `framework = espidf`, no Arduino).
 
 ```
    ESP32-S3 ──mutual TLS──> AWS IoT Core ── Jobs (orchestration)
@@ -12,141 +11,142 @@ on **pure ESP-IDF 5.3.x** (PlatformIO, `framework = espidf` — no Arduino).
       └ download → verify signature → activate → reboot → self-test → commit / ROLLBACK
 ```
 
-> This page describes **variant C** (the maximal-AWS stack). The repo also carries
-> two lighter variants — **B** (AWS IoT Jobs + self-download) and **A** (fully
-> custom) — see [Three OTA variants](#three-ota-variants) and the
-> [flash benchmark](#flash-benchmark--the-cost-of-aws-standardization-c-vs-b-vs-a).
+> The walkthrough uses **variant C** (`pio run -e mqtt` + `aws-iot/` with `BACKEND=mqtt`),
+> one of [four swappable backends](#one-firmware-four-swappable-ota-backends).
 
-## Status (verified vs. expected — read this)
+## Status (verified vs. expected)
 
-- ✅ **Firmware builds** in PlatformIO (`framework = espidf`, ESP-IDF 5.3.1) with
-  the full Modular OTA stack; the image is ~57% of a 1.56 MB OTA slot.
-- ✅ **CDK synthesizes** to valid CloudFormation; the device IoT policy and OTA
-  role/signing wiring were inspected in the emitted template.
+- ✅ **Firmware builds** (PlatformIO `espidf`, ESP-IDF 5.3.1) with the full Modular
+  OTA stack; image ~57% of a 1.56 MB OTA slot.
+- ✅ **CDK synthesizes** to valid CloudFormation; device IoT policy and OTA
+  role/signing wiring inspected in the emitted template.
 - ✅ **On-device logic** (Jobs control plane, file-streams download, ECDSA-P256
-  signature verify in the PAL, self-test → commit/rollback, the anti-brick
-  watchdog) was reviewed against the vendored SDK + ESP-IDF source.
-- ⛳ **The end-to-end OTA round-trip + rollback have NOT been run on a live AWS
-  account / flashed board** — they can't be without your credentials and
-  hardware. The job **SUCCEEDED** (happy path) and **FAILED/TIMED_OUT** (rollback)
-  outcomes are the *expected* results of the documented steps, not yet observed
-  here. Do one real run to confirm. The Jobs control plane reports
-  `IN_PROGRESS` → `SUCCEEDED`/`FAILED` explicitly (subscribes to both
-  `jobs/notify-next` and `jobs/start-next/accepted`) so a pushed job is promoted
-  off `QUEUED` rather than risking a spurious `TIMED_OUT`.
+  verify in the PAL, self-test → commit/rollback, anti-brick watchdog) reviewed
+  against the vendored SDK + ESP-IDF source.
+- ⛳ **Not yet run on a live AWS account / flashed board** — needs your credentials
+  and hardware. `SUCCEEDED` (happy path) and `FAILED`/`TIMED_OUT` (rollback) are the
+  expected results of the documented steps, not yet observed. The Jobs control plane
+  subscribes to both `jobs/notify-next` and `jobs/start-next/accepted` and reports
+  `IN_PROGRESS → SUCCEEDED/FAILED`, so a pushed job is promoted off `QUEUED` rather
+  than risking a spurious `TIMED_OUT`.
 
-## Two decisions this POC settled (with evidence)
+## Two decisions this POC settled
 
-This started from a broader brief (two connection modes incl. a local Greengrass
-core; the classic AWS *OTA Agent*). Two things were checked against primary
-sources and changed the shape:
+The original brief included a local Greengrass core and the classic AWS *OTA Agent*.
+Both were checked against primary sources and changed:
 
-1. **Modular OTA, not the classic `OTA_Init` OTA Agent.** The classic agent
-   exists only in `esp-aws-iot` ≤ `release/202210.01-LTS`, which supports
-   ESP-IDF ≤ 5.1 and is **end-of-life**. ESP-IDF 5.3.x is supported only on
-   `202406.05-LTS`, which **removed** the agent and ships the **AWS IoT Jobs +
-   MQTT File Streams** libraries instead (verified by listing both branches).
-   The firmware here uses that current, supported path (reference:
-   `FreeRTOS/iot-reference-esp32`). The architecture the brief asked for — Jobs
-   orchestration, AWS Signer ECDSA-P256 verification, self-test/commit/rollback —
-   is all intact; only the on-device API is the modern one.
+1. **Modular OTA, not the classic `OTA_Init` agent.** The classic agent exists only
+   in `esp-aws-iot` ≤ `release/202210.01-LTS` (ESP-IDF ≤ 5.1, end-of-life). ESP-IDF
+   5.3.x is supported only on `202406.05-LTS`, which removed the agent and ships the
+   AWS IoT Jobs + MQTT File Streams libraries instead. The firmware uses that current
+   path (ref: `FreeRTOS/iot-reference-esp32`); the requested architecture — Jobs
+   orchestration, Signer ECDSA-P256 verify, self-test/commit/rollback — is intact,
+   only the on-device API is the modern one.
 
-2. **Greengrass was dropped.** The brief flagged "validate, don't assume" for
-   relaying the reserved `$aws/things/<thing>/jobs/*` topics over the Greengrass
-   MQTT Bridge. It was validated: **it does not work.** AWS publishes Jobs
-   request/response messages *directly to the publishing client*, bypassing the
-   broker ("these response messages don't pass through the message broker"), and
-   the Bridge is a separate client with the *core's* identity — so it cannot
-   carry a client device's Jobs control plane. AWS's own analogue (client-device
-   Shadows) bridges reserved topics LocalMqtt↔**Pubsub** (local-only) plus a
-   dedicated Shadow Manager; there is no Jobs equivalent. The managed OTA agent
-   also can't be pointed at a LAN file server (the download source comes from
-   AWS S3/streams). So a fully-local managed OTA isn't achievable, and Greengrass
-   adds nothing to the OTA story — it's orthogonal. Scope is therefore a focused
-   **AWS IoT Core** OTA POC.
+2. **Greengrass dropped.** Relaying the reserved `$aws/things/<thing>/jobs/*` topics
+   over the Greengrass MQTT Bridge does not work: AWS publishes Jobs request/response
+   messages directly to the publishing client, bypassing the broker, and the Bridge is
+   a separate client with the *core's* identity — so it can't carry a client device's
+   Jobs control plane. (AWS's analogue, client-device Shadows, bridges reserved topics
+   LocalMqtt↔Pubsub local-only plus a Shadow Manager; there's no Jobs equivalent.) The
+   managed agent also can't be pointed at a LAN file server. Greengrass is orthogonal
+   to OTA, so scope is AWS IoT Core only.
 
 ## Architecture decisions (carried forward)
 
-- **Identity = mutual TLS** with a plaintext device cert + key (embedded). The
-  transport keeps `use_secure_element` + `ds_data` fields, so moving the key to
-  the **DS peripheral / `esp_secure_cert`** later is a config change, not a
-  protocol change. DS provisioning is **not** implemented here.
-- **Orchestration = AWS IoT Jobs**, created by the OTA Manager
-  (`aws iot create-ota-update` → Signer job + Stream + Job).
-- **Authenticity:** the OTA agent's **AWS Signer code signature (ECDSA-P256)** is
-  verified on-device before activation. **Secure Boot v2 + Flash Encryption are
-  OFF** on dev units (a separate hardening pass; where they slot in is noted in
-  `esp/partitions.csv`). The code-signature check still runs and is exercised.
-- **Commit semantics:** an OTA image boots `PENDING_VERIFY`; a watchdog is armed,
-  a self-test confirms a cloud round-trip + a core-function check, and only then
-  does the device commit (`esp_ota_mark_app_valid_cancel_rollback`). Otherwise it
-  rejects → the bootloader rolls back. `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`.
+- **Identity = mutual TLS** with an embedded plaintext device cert + key. The
+  transport keeps `use_secure_element` + `ds_data` fields, so moving the key to the
+  DS peripheral / `esp_secure_cert` later is a config change, not a protocol change.
+  DS provisioning is not implemented.
+- **Orchestration = AWS IoT Jobs**, created by the OTA Manager (`aws iot
+  create-ota-update` → Signer job + Stream + Job).
+- **Authenticity:** the AWS Signer code signature (ECDSA-P256) is verified on-device
+  before activation. Secure Boot v2 + Flash Encryption are OFF on dev units (separate
+  hardening pass; see `esp/partitions.csv`); the signature check still runs.
+- **Commit semantics:** an OTA image boots `PENDING_VERIFY`; a watchdog is armed, a
+  self-test confirms a cloud round-trip + core-function check, then the device commits
+  (`esp_ota_mark_app_valid_cancel_rollback`) — otherwise the bootloader rolls back.
+  `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y`.
 
-## Three OTA variants
+## One firmware, four swappable OTA backends
 
-The repo carries three points on the "how much AWS to adopt" spectrum (from the
-*Anti-Bricking OTA & Identity Re-issuance* design doc, Appendix 1) — each a
-self-contained **firmware + cloud** pair:
+One codebase ([`esp/`](esp/)) with four interchangeable OTA backends behind a stable
+device API ([`esp/src/device_iot.h`](esp/src/device_iot.h)). The app
+(`esp/src/app_main.c`) runs unchanged on any backend; pick one at build time:
 
-| | firmware | cloud | on-device stack |
+```bash
+cd esp
+pio run -e mqtt     # C: AWS OTA agent · MQTT File Streams · Signer ECDSA verify
+pio run -e https    # D: AWS OTA agent · HTTPS data path   · Signer ECDSA verify
+pio run -e jobs     # B: AWS IoT Jobs lib · esp_https_ota   · no on-device verify
+pio run -e manual   # A: custom MQTT protocol · esp_https_ota · no AWS libraries
+```
+
+Two axes — **orchestration** (AWS OTA agent / standalone Jobs lib / hand-rolled) ×
+**transfer** (MQTT File Streams / HTTPS presigned URL); C/D/B/A map to the
+*Anti-Bricking OTA* doc:
+
+| backend (`-e`) | doc | orchestration · transfer · on-device authenticity | cloud ([`aws-iot/`](aws-iot/)) |
 |---|---|---|---|
-| **C** — AWS OTA stack | [`esp/`](esp/) | [`aws-iot/`](aws-iot/) | coreMQTT + Jobs + MQTT File Streams + OTA PAL (ECDSA verify); Signer + `create-ota-update` |
-| **B** — AWS IoT Jobs | [`jobs-esp/`](jobs-esp/) | [`jobs-aws-iot/`](jobs-aws-iot/) | esp-mqtt + Jobs lib + `esp_https_ota` (presigned S3 URL); `create-job` w/ custom doc |
-| **A** — fully custom | [`manual-esp/`](manual-esp/) | [`manual-aws-iot/`](manual-aws-iot/) | esp-mqtt + hand-rolled MQTT protocol + `esp_https_ota`; operator scripts |
+| `mqtt`   | C | AWS OTA agent (coreMQTT+Jobs) · **MQTT File Streams** · Signer ECDSA verify | `BACKEND=mqtt` |
+| `https`  | D | AWS OTA agent (coreMQTT+Jobs) · **HTTPS GET** (presigned URL) · Signer ECDSA verify | `BACKEND=https` |
+| `jobs`   | B | esp-mqtt + standalone Jobs lib · `esp_https_ota` · none (TLS + Secure Boot) | `BACKEND=jobs` |
+| `manual` | A | esp-mqtt + hand-rolled MQTT protocol · `esp_https_ota` · none | `BACKEND=manual` |
 
-esp-aws-iot is vendored once under `esp/components/esp-aws-iot` (a git submodule);
-`jobs-esp` references the Jobs lib from there, `manual-esp` uses **no** AWS
-libraries. `self_test.c` (the anti-brick gate), `wifi.c` and the partition table
-are shared **verbatim** across all three. Each directory has its own README.
+Each backend = one *transport* (`transport.h`) + one *orchestrator* (`ota_backend.h`).
+A pre-script (`select_backend.py`) exports the env name so CMake compiles only that
+backend's two sources and its component deps — no runtime dispatch, each binary as
+lean as a single-purpose build. The app, `self_test.c`, `wifi.c`, and the partition
+table are shared verbatim; esp-aws-iot is vendored once under
+`esp/components/esp-aws-iot` (mqtt/https/jobs reference it; manual uses no AWS libs).
+See [`esp/README.md`](esp/README.md). The cloud stays split per backend.
 
-## Flash benchmark — the cost of AWS standardization (C vs B vs A)
+## Flash benchmark — what drives image size (C vs D vs B vs A)
 
-All three build with the **identical** partition table (a 1.56 MB OTA slot), so
-the numbers are directly comparable (vGOOD, same version, `feather_s3`).
+All four build from the same `esp/` codebase with the identical partition table
+(1.56 MB OTA slot), so the numbers are directly comparable (vGOOD, same version):
 
-| variant | flash (`.bin`) | % of 1.56 MiB slot | static RAM |
-|---|--:|--:|--:|
-| **C** — coreMQTT + File Streams + PAL (`esp/`) | 940,816 B | 57.4 % | 72,852 B |
-| **B** — Jobs + esp_https_ota (`jobs-esp/`) | 974,672 B | 59.5 % | 48,764 B |
-| **A** — custom + esp_https_ota (`manual-esp/`) | 966,704 B | 59.0 % | 47,612 B |
+| backend | doc | flash (`.bin`) | % of 1.56 MiB slot | static RAM |
+|---|---|--:|--:|--:|
+| `mqtt`   | C — agent, MQTT data path | 941,744 B | 57.5 % | 73,068 B |
+| `manual` | A — custom proto, HTTPS | 967,440 B | 59.0 % | 47,828 B |
+| `https`  | D — agent + Signer verify, HTTPS | 971,824 B | 59.3 % | 56,212 B |
+| `jobs`   | B — Jobs lib, HTTPS | 975,376 B | 59.5 % | 48,980 B |
 
-**Counterintuitive result: the "less-AWS" variants use *more* flash, not less** —
-B is **+33.9 KB** and A is **+25.9 KB** vs C — but both use **~24 KB *less* RAM**.
+(The shared `device_iot` facade adds a uniform ~0.5–0.8 KB, so the per-component
+comparison below is unaffected.)
 
-**Why (per-component, flash bytes).** C→B/A *removes* ~27 KB (`coreMQTT` 16.4K,
-`aws-iot-core-mqtt-file-streams` 6.7K, `espressif__cbor` 3.9K, `backoffAlgorithm`
-0.2K) but *adds* ~57 KB — almost all of it the HTTP self-download stack:
+**The data path drives flash, not the amount of AWS.** C streams firmware over the
+existing MQTT/TLS connection and is alone at the bottom (~940 KB). A, D and B
+self-download over HTTPS, pulling in an HTTP client stack (~30 KB), so they cluster
+at 967–975 KB within ~8 KB of each other — whether orchestrated by a hand-rolled
+protocol (A), the Jobs lib (B), or the full agent with Signer verify (D). Switching
+MQTT-streams → HTTPS costs ~30 KB; the amount of AWS machinery barely matters.
 
-| added in B/A | flash |
-|---|--:|
-| `libmqtt` (esp-mqtt) | 16,355 |
-| **`http_parser`** | **15,951** |
-| `esp_http_client` | 10,329 |
-| `tcp_transport` | 8,785 |
-| `esp_https_ota` | 3,173 |
-| `cJSON` | 2,699 |
+**Per-component (flash bytes):**
 
-esp-mqtt (16.4K) ≈ coreMQTT (16.4K) — a wash. The real cost is the **HTTP client
-stack** (`http_parser` + `esp_http_client` + `tcp_transport` + `esp_https_ota` ≈
-**38 KB**), which exists only to self-download firmware over a *second* HTTPS
-connection. Variant C avoids it by streaming the image over the **existing**
-MQTT/TLS connection (File Streams, ~6.7 KB). The single largest flash symbol in
-B/A is `http_parser_execute` at **12,557 bytes** — absent in C. A is 8 KB smaller
-than B because it drops the Jobs lib + coreJSON.
+| archive | C | D | B | A |
+|---|--:|--:|--:|--:|
+| `coreMQTT` / esp-mqtt (`libmqtt`) | 16,391 | 16,399 | 16,361 | 16,353 |
+| `http_parser` | — | 15,947 | 15,951 | 15,951 |
+| `esp_http_client` | — | 8,939 | 10,329 | 10,329 |
+| `tcp_transport` | — | 3,895 | 8,787 | 8,783 |
+| `esp_https_ota` | — | — | 3,173 | 3,173 |
+| File Streams + PAL | 6,684 | 4,448 | — | — |
+| `espressif__cbor` | 3,873 | — | — | — |
+| Jobs lib + coreJSON | 7,465 | 7,436 | 6,226 | — |
+| cJSON (`libjson`) | — | — | 2,695 | 2,699 |
+| mbedTLS + crypto + x509 (shared floor) | ~150 K | ~150 K | ~150 K | ~150 K |
 
-**Shared floor (≈ constant all three):** mbedTLS/crypto/x509 ~150 KB + WiFi/lwIP/IDF
-~600 KB dominate; the OTA-stack delta (~30 KB) is small against the ~940 KB whole.
+D drops `espressif__cbor` and the unused MQTTFileDownloader, so despite keeping the
+full agent + PAL it lands ~3 KB smaller than B. The shared mbedTLS + WiFi + IDF floor
+(~750 KB) dwarfs the ~30 KB OTA-stack delta. RAM ordering — C 73 KB ≫ D 56 KB >
+B 49 KB ≈ A 48 KB — tracks each variant's static MQTT/streams buffering; HTTPS drops
+C's File-Streams block buffers. **D answers "signed URL with the agent?":** efficient
+HTTPS transfer plus on-device Signer verify, at ~B's flash and ~17 KB less RAM than C.
 
-**Takeaway.** The flash "cost of standardization" is **inverted**: the maximal-AWS
-variant (C) is the *smallest* image, because the OTA agent reuses one MQTT/TLS
-connection for everything while the DIY variants pay ~38 KB to bolt on an HTTP
-client. Where B/A win is **RAM** (~24 KB less — no coreMQTT network buffer, no 2×
-8 KB File-Streams block buffers, no second mbedTLS context held across tasks). On
-this 4 MB-flash / 512 KB-RAM part the trade is "spend a little more flash to save
-scarcer RAM"; all three sit at 57–60 % of the OTA slot with headroom either way.
-
-> Reproduce: build each `*-esp` (`pio run -e feather_s3`), then
-> `python -m esp_idf_size --archives .pio/build/feather_s3/<proj>.map` (per-component)
+> Reproduce: from `esp/`, build each backend, then
+> `python -m esp_idf_size --archives .pio/build/<backend>/<proj>.map` (per-component)
 > and `xtensa-esp32s3-elf-nm --print-size --size-sort firmware.elf` (per-function).
 
 ## Quickstart (end to end)
@@ -154,43 +154,44 @@ scarcer RAM"; all three sit at 57–60 % of the OTA slot with headroom either wa
 ```bash
 git submodule update --init --recursive          # pull esp-aws-iot + its libs
 
-# 1) Cloud resources
-cd aws-iot && npm install && npx cdk deploy && cd ..
+# 1) Cloud resources  (one dir, backend chosen by BACKEND — here variant C)
+cd aws-iot && npm install && BACKEND=mqtt npx cdk deploy && cd ..
 
 # 2) Device identity + code-signing material (writes certs into esp/src/certs/)
-aws-iot/scripts/register-device.sh
-aws-iot/scripts/make-codesign-cert.sh
+BACKEND=mqtt aws-iot/scripts/register-device.sh
+BACKEND=mqtt aws-iot/scripts/make-codesign-cert.sh    # (mqtt/https only; no-ops otherwise)
 
 # 3) Firmware: set Wi-Fi + endpoint + Thing name, build the initial image, flash
-cp esp/src/secrets.h.example esp/src/secrets.h     # then edit it
-esp/scripts/build-fixture.sh good 1.0.0
-cd esp && pio run -e feather_s3 -t upload -t monitor && cd ..
+cp esp/src/secrets.h.example esp/src/secrets.h        # then edit it
+esp/scripts/build-fixture.sh mqtt good 1.0.0          # backend = mqtt (C)
+cd esp && pio run -e mqtt -t upload -t monitor && cd ..
 
 # 4) Happy-path OTA  (downloads, verifies, self-tests, COMMITS -> job SUCCEEDED)
-esp/scripts/build-fixture.sh good 2.0.0
-aws-iot/scripts/sign-and-publish.sh esp/fixtures/firmware-good-v2.0.0.bin 2.0.0
-aws-iot/scripts/push-ota.sh  esp32-ota-poc-01 2.0.0
-aws-iot/scripts/watch-job.sh esp32-ota-poc-01
+esp/scripts/build-fixture.sh mqtt good 2.0.0
+BACKEND=mqtt aws-iot/scripts/upload-firmware.sh esp/fixtures/firmware-mqtt-good-v2.0.0.bin 2.0.0
+BACKEND=mqtt aws-iot/scripts/push-update.sh esp32-ota-poc-01 2.0.0
+BACKEND=mqtt aws-iot/scripts/watch.sh       esp32-ota-poc-01
 
 # 5) Rollback OTA  (self-test fails -> device ROLLS BACK, stays alive -> job FAILED)
-esp/scripts/build-fixture.sh bad 2.0.0
-aws-iot/scripts/sign-and-publish.sh esp/fixtures/firmware-bad-v2.0.0.bin 2.0.0-bad
-aws-iot/scripts/push-ota.sh  esp32-ota-poc-01 2.0.0-bad
-aws-iot/scripts/watch-job.sh esp32-ota-poc-01
+esp/scripts/build-fixture.sh mqtt bad 2.0.0
+BACKEND=mqtt aws-iot/scripts/upload-firmware.sh esp/fixtures/firmware-mqtt-bad-v2.0.0.bin 2.0.0-bad
+BACKEND=mqtt aws-iot/scripts/push-update.sh esp32-ota-poc-01 2.0.0-bad
+BACKEND=mqtt aws-iot/scripts/watch.sh       esp32-ota-poc-01
 ```
+(Swap `mqtt` for `https`/`jobs`/`manual` in both `-e` and `BACKEND=` for any other
+backend — the steps are otherwise identical.)
 
 ## Acceptance criteria → where
 
 | # | criterion | status |
 |---|-----------|--------|
 | 1 | builds in PlatformIO `espidf`, connects to AWS IoT Core | build ✅ verified; connect = logic reviewed, needs a live run |
-| 2 | happy path: download → verify Signer sig → activate → self-test commits → **SUCCEEDED** | logic in `ota_orchestrator.c` / `self_test.c` ✅; outcome expected, run step 4 to confirm |
+| 2 | happy path: download → verify Signer sig → activate → self-test commits → **SUCCEEDED** | logic in `orchestrators/ota_filestreams.c` / `self_test.c` ✅; outcome expected, run step 4 to confirm |
 | 3 | rollback: `vBAD` → self-test fails → **rollback** → device alive → **FAILED/TIMED_OUT** | `FW_SELFTEST_SHOULD_PASS=0` fixture builds ✅; outcome expected, run step 5 to confirm |
-| 4 | a fresh dev reproduces each path from the READMEs | this file + the two dir READMEs |
+| 4 | a fresh dev reproduces each path from the READMEs | this file + the `esp/` and `aws-iot/` READMEs |
 
-## Out of scope (by design)
+## Out of scope
 
-Secure Boot / Flash Encryption eFuse burns; DS-peripheral provisioning; the
-recovery/factory image + captive portal; A/B identity re-key; any custom
-server-driven control plane; **AWS IoT Greengrass** (see decision #2). This POC is
-the managed AWS IoT Core path only.
+Secure Boot / Flash Encryption eFuse burns; DS-peripheral provisioning; recovery/
+factory image + captive portal; A/B identity re-key; custom server-driven control
+plane; AWS IoT Greengrass (decision #2). Managed AWS IoT Core path only.

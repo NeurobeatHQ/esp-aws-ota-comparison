@@ -55,13 +55,28 @@
     #error "Define THING_NAME in secrets.h (must equal the AWS IoT Thing name)"
 #endif
 
+/* Upper bound for a (possibly runtime-overridden) Thing name. Bounds the resolved
+ * copy in device_iot and the OTA topic buffers in the orchestrators. AWS IoT
+ * permits up to 128 chars; this covers it. */
+#define MAX_THING_NAME_LEN 128
+
 /* --------------------------------------------------------------------------
  * Tunables
  * ------------------------------------------------------------------------ */
 #define WIFI_MAXIMUM_RETRY              10
 #define MQTT_KEEP_ALIVE_SECONDS         60
 #define MQTT_NETWORK_BUFFER_SIZE        8192   /* must hold a job doc + headers */
-#define MQTT_PROCESS_LOOP_TIMEOUT_MS    500
+#define MQTT_PROCESS_LOOP_TIMEOUT_MS    500    /* coreMQTT transport */
+#define MQTT_INITIAL_CONNECT_TIMEOUT_MS ( 60 * 1000 )  /* esp-mqtt transport */
+
+/* Publish outbox bound (both transports). Backpressure surfaces uniformly as a
+ * bounded queue: transport_publish enqueues and returns; once the outbox holds
+ * this many bytes / messages, further publishes return ESP_ERR_NO_MEM instead of
+ * blocking (coreMQTT) or growing unbounded (esp-mqtt). QoS1 messages stay in the
+ * outbox until PUBACK'd and are retransmitted. */
+#define MQTT_OUTBOX_LIMIT_BYTES         ( 32 * 1024 )
+#define MQTT_OUTBOX_MAX_MSGS            16
+#define MQTT_QOS1_RETRANSMIT_MS         ( 10 * 1000 )
 
 /* Self-test window. Covers Wi-Fi + the (bounded) initial MQTT connect + the
  * core-function check. If the trial image HANGS within this budget the Task WDT

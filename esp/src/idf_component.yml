@@ -1,9 +1,19 @@
 ## IDF component-manager manifest for the "main" component.
-## The aws-iot-core-mqtt-file-streams-embedded-c component REQUIRES `espressif__cbor`
-## (its CBOR stream codec is compiled in even though this firmware downloads via
-## the JSON stream). The first build fetches it from the registry.
+##
+## espressif/cbor is declared HERE (not left to the aws-iot-core-mqtt-file-streams
+## component's own manifest) on purpose, and UNCONDITIONALLY. PlatformIO keeps ONE
+## managed_components/ + dependencies.lock at the project root, shared across every
+## env. If cbor were only a transitive dep of file-streams (built by mqtt/https
+## only), then configuring jobs/manual would make the IDF component manager
+## re-resolve and PRUNE cbor from that shared dir; the next mqtt/https build then
+## dies ("cbor.h not found" / "source not found") because its ninja graph still
+## references the deleted sources. A conditional `if: $ENV{PIOENV} in [...]` would
+## NOT help — it just makes jobs/manual exclude (==prune) cbor again. Declaring it
+## for ALL envs is what keeps it resolved. jobs/manual never reference cbor symbols,
+## so the linker drops libcbor.a from those images (0 flash); only a cached compile
+## remains. (See platform-espressif32#1514, idf-component-manager#46.)
 dependencies:
+  espressif/cbor:
+    version: "^0.6.1~4"     # match the file-streams lib's spec to avoid a resolver conflict
   idf:
     version: ">=5.3"
-  espressif/cbor:
-    version: ">=0.6.0"

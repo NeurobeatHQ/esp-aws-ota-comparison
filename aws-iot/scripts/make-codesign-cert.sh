@@ -14,6 +14,11 @@ set -euo pipefail
 cd "$(dirname "$0")"
 . ./_lib.sh
 
+if ! backend_uses_signer; then
+  log "backend '$BACKEND' has no on-device code-signing (authenticity = TLS + Secure Boot); nothing to do."
+  exit 0
+fi
+
 WORK="codesign"
 mkdir -p "$WORK"
 KEY="$WORK/ecdsasigner.key"

@@ -1,162 +1,104 @@
-# `esp/` — ESP32-S3 firmware (PlatformIO · pure ESP-IDF 5.3 · Modular OTA)
+# `esp/` — unified, backend-swappable OTA firmware
 
-Rollback-safe Over-The-Air updates on an **Adafruit Feather ESP32-S3** using the
-**AWS-managed stack**: AWS IoT **Jobs** + **MQTT File Streams** ("Modular OTA") +
-**coreMQTT** over mutual TLS. Pure ESP-IDF — `app_main()`, FreeRTOS tasks,
-`ESP_LOGx`; no Arduino.
-
-> **Why "Modular OTA" and not the classic `OTA_Init` agent?** The classic AWS OTA
-> Agent only exists in `esp-aws-iot` ≤ `202210.01-LTS`, which supports ESP-IDF
-> ≤ 5.1 and is end-of-life. ESP-IDF 5.3.x is supported only on `202406.05-LTS`,
-> which **replaced** the agent with the Jobs + MQTT-File-Streams libraries used
-> here (Espressif's current, supported path; reference: `FreeRTOS/iot-reference-esp32`).
-> See the top-level [README](../README.md) for the full decision record.
-
-## How it works
-
-```
-            ┌─────────────────────── ESP32-S3 ───────────────────────┐
- AWS IoT    │  mqtt_client.c        ota_orchestrator.c    self_test.c │
- Core  <════╪═ coreMQTT (mTLS) ══>  Jobs + FileStreams +   trial-boot  │
- (Jobs +    │  esp-tls transport    OTA PAL (esp_ota_*)    self-test    │
-  streams)  │        ▲                     │                  │        │
-            │        └── incoming PUBLISH ─┘   commit/rollback ┘        │
-            └─────────────────────────────────────────────────────────┘
-```
-
-1. `app_main` brings up Wi-Fi, then coreMQTT to AWS IoT Core (mutual TLS, embedded
-   device cert/key).
-2. `ota_orchestrator` subscribes to `$aws/things/<thing>/jobs/notify-next`,
-   pulls a job with `StartNext`, parses the AFR-OTA job document, downloads the
-   image block-by-block over the MQTT stream, **verifies the AWS Signer
-   ECDSA-P256 signature** (OTA PAL), writes the passive `ota_x` slot, then
-   activates + reboots.
-3. The new image boots **PENDING_VERIFY**. `self_test` arms a watchdog, confirms
-   the cloud round-trip (MQTT connected) + a core-function check, and either
-   **commits** (`esp_ota_mark_app_valid_cancel_rollback`, report job
-   **SUCCEEDED**) or **rejects** (`esp_ota_mark_app_invalid_rollback_and_reboot`,
-   report **FAILED**) → the bootloader rolls back to the previous slot.
-
-The in-flight job id is stashed in NVS before activation so the freshly-booted
-trial image can report the job result for it.
-
-### Source map
-
-| file | role |
-|------|------|
-| `src/app_main.c`         | boot sequence; arms the self-test watchdog up front on a trial boot |
-| `src/wifi.c`             | Wi-Fi station bring-up |
-| `src/mqtt_client.c`      | coreMQTT over the esp-tls `network_transport`; process-loop task + reconnect |
-| `src/ota_orchestrator.c` | Modular OTA state machine (Jobs + MQTT File Streams + OTA PAL) |
-| `src/self_test.c`        | trial-boot detection, watchdog, commit/reject, NVS job-id hand-off |
-| `src/app_config.h`       | non-secret config + version/variant flags |
-| `src/secrets.h`          | Wi-Fi creds, endpoint, Thing name (gitignored — copy from `.example`) |
-| `partitions.csv`         | 4 MB, dual `ota_0`/`ota_1` + `otadata` (no factory image) |
-| `sdkconfig.defaults`     | rollback, mbedTLS threading, watchdog, flash size |
-
-## Prerequisites
-
-- **PlatformIO Core** (`pip install platformio`, or the IDE). First build downloads
-  ESP-IDF 5.3.1 + the Xtensa toolchain (one-time, a few hundred MB).
-- The **esp-aws-iot** component, vendored as a git submodule:
-  ```bash
-  git submodule update --init --recursive        # from the repo root
-  ```
-- The board wired for flashing (this repo's `esp-flashcycle` setup uses a Waveshare
-  RP2350-One bridge; a plain USB connection works too).
-
-## One-time setup
-
-1. **Secrets**
-   ```bash
-   cp src/secrets.h.example src/secrets.h
-   # edit src/secrets.h: WIFI_SSID, WIFI_PASSWORD, AWS_IOT_ENDPOINT, THING_NAME
-   ```
-   Get the endpoint with:
-   ```bash
-   aws iot describe-endpoint --endpoint-type iot:Data-ATS --query endpointAddress --output text
-   ```
-   `THING_NAME` **must** equal the AWS IoT Thing name (clientId == thing name).
-
-2. **Device certificate + key** — overwrite the placeholders (see
-   [`../aws-iot/README.md`](../aws-iot/README.md) to create/register them):
-   ```
-   src/certs/client.crt        # device certificate
-   src/certs/client.key        # device private key (plaintext, POC)
-   src/certs/aws_codesign.crt   # PUBLIC code-signing cert (must match the Signer profile)
-   ```
-   `src/certs/AmazonRootCA1.pem` is already the real (public) AWS root CA.
-
-## Build · flash · monitor
+One ESP32-S3 firmware codebase with **four interchangeable OTA backends** behind a
+single stable device API. The application is written once against
+[`src/device_iot.h`](src/device_iot.h) and runs unchanged on any backend — you
+pick one at **build time**:
 
 ```bash
-pio run -e feather_s3                 # build
-pio run -e feather_s3 -t upload       # flash
-pio run -e feather_s3 -t monitor      # serial @ 115200
+pio run -e mqtt     # C: AWS OTA agent · MQTT File Streams · Signer ECDSA verify
+pio run -e https    # D: AWS OTA agent · HTTPS data path   · Signer ECDSA verify
+pio run -e jobs     # B: AWS IoT Jobs lib · esp_https_ota   · no on-device verify
+pio run -e manual   # A: custom MQTT protocol · esp_https_ota · no AWS libraries
 ```
-(In this repo you can instead use the **`esp-flashcycle`** skill to flash + watch
-logs through the RP2350-One bridge.)
 
-First healthy image:
+(These four replace the former `mqtt-esp/`, `https-esp/`, `jobs-esp/`, `manual-esp/`
+directories — same code, now swappable. The cloud is likewise unified into one
+[`../aws-iot`](../aws-iot/README.md), deployed with a matching `BACKEND=<backend>`.)
+
+## The normalized API (why apps are portable)
+
+An application includes only `device_iot.h`:
+
+```c
+#include "device_iot.h"
+
+static bool app_healthy(void) { /* your post-OTA health gate */ return true; }
+static void on_cmd(const char *topic, const uint8_t *d, size_t n) { /* ... */ }
+static void on_conn(bool up) { if (up) device_iot_publish("status", "online", 6, 1); }
+
+void app_main(void) {
+    device_iot_set_health_check(app_healthy);
+    device_iot_set_connection_cb(on_conn);   // birth on connect; fires on reconnect too
+    device_iot_init(NULL);                    // Wi-Fi + cloud + OTA backend + trial-boot
+                                              // (NULL = build-time identity; pass a
+                                              //  device_iot_config_t to provision at runtime)
+    device_iot_subscribe("cmd", on_cmd);      // dt/<thing>/cmd
+    for (;;) {
+        device_iot_publish("heartbeat", json, len, 1);    // dt/<thing>/heartbeat, QoS1
+        vTaskDelay(pdMS_TO_TICKS(30000));
+    }
+}
+```
+
+The facade is the whole portability story, and it is **the same on every backend**:
+
+- **`device_iot_init(cfg)`** — `NULL` uses the build-time identity (`secrets.h` +
+  embedded certs); pass a `device_iot_config_t` to supply the endpoint, Thing name,
+  and cert/key (or a DS-peripheral handle) at runtime — one image, per-device
+  identity. Each field falls back to its compile-time default when unset.
+- **`device_iot_publish(subtopic, …, qos)`** — non-blocking; enqueues into a bounded
+  outbox and returns. **QoS1 is delivered at-least-once** (retransmitted until the
+  broker acks, surviving reconnects). Under sustained backpressure it returns
+  `ESP_ERR_NO_MEM` rather than blocking (coreMQTT) or growing until OOM (esp-mqtt) —
+  identical semantics whether coreMQTT or esp-mqtt is linked.
+- **`device_iot_publish_topic` / `device_iot_subscribe_topic`** — arbitrary topics
+  (Device Shadow `$aws/things/…`, fleet, custom), wildcard (`+`/`#`) delivery.
+- **`device_iot_set_connection_cb(cb)`** — fires on first connect and every reconnect
+  (the facade has already re-subscribed your subscriptions), and on disconnect.
+
+That `app_main` is **byte-for-byte identical** for all four backends (it's the real
+`src/app_main.c`). The facade hides coreMQTT vs esp-mqtt, AWS Jobs vs a custom
+protocol, and MQTT-streams vs HTTPS download.
+
+## How the swap works
+
+```
+src/
+├── app_main.c          # the app — device_iot.h only, identical across backends
+├── device_iot.[ch]     # the stable facade + boot orchestration + publish router
+├── transport.h         # contract: transport_start/publish/subscribe/is_connected
+├── ota_backend.h       # contract: ota_backend_start / ota_backend_on_publish
+├── self_test.[ch]      # trial-boot gate, watchdog, commit/rollback (shared)
+├── wifi.[ch] · app_config.h · ota_download.[ch] · certs/
+├── transports/
+│   ├── transport_coremqtt.c   # coreMQTT  (mqtt + https backends)
+│   └── transport_espmqtt.c    # esp-mqtt  (jobs + manual backends)
+└── orchestrators/
+    ├── ota_filestreams.c  ota_http.c  ota_jobs.c  ota_manual.c
+```
+
+Each backend = one **transport** (`transport.h`) + one **orchestrator**
+(`ota_backend.h`). `select_backend.py` (a PlatformIO pre-script) exports the env
+name as `OTA_BACKEND`; [`src/CMakeLists.txt`](src/CMakeLists.txt) then compiles
+**only** that backend's two source files and lists **only** its component deps —
+so each binary is exactly as lean as the standalone variant was (verified: the
+unified `-e mqtt` build is within ~0.5 KB of the old `mqtt-esp`). No runtime
+dispatch, no dead stacks linked in.
+
+Adding a fifth backend = drop in `transports/…` and/or `orchestrators/ota_x.c`
+that implement the two contracts, add an `elseif` in `src/CMakeLists.txt`, and a
+`[env:x]`.
+
+## Build · flash · fixtures
+
 ```bash
-scripts/build-fixture.sh good 1.0.0
-pio run -e feather_s3 -t upload       # or flash fixtures/firmware-good-v1.0.0.bin
+cp src/secrets.h.example src/secrets.h    # Wi-Fi + endpoint + Thing name
+pio run -e mqtt                            # (or https | jobs | manual)
+pio run -e mqtt -t upload -t monitor
+scripts/build-fixture.sh mqtt good 2.0.0   # vGOOD/vBAD fixture per backend
 ```
 
-## Demonstrating OTA + rollback
-
-Build the two OTA target fixtures:
-```bash
-scripts/build-fixture.sh good 2.0.0   # -> fixtures/firmware-good-v2.0.0.bin  (commits)
-scripts/build-fixture.sh bad  2.0.0   # -> fixtures/firmware-bad-v2.0.0.bin   (rolls back)
-```
-`good` builds with `FW_SELFTEST_SHOULD_PASS=1`; `bad` with `=0`, so its
-post-reboot self-test deterministically fails. Then, from [`../aws-iot/`](../aws-iot/):
-
-> The two flows below are the **expected** behaviour of the documented steps.
-> The on-device logic is reviewed and the firmware builds, but the full cloud
-> round-trip has not been run on a live account here — do one run to confirm.
-
-**Happy path**
-```bash
-../aws-iot/scripts/sign-and-publish.sh ../esp/fixtures/firmware-good-v2.0.0.bin 2.0.0
-../aws-iot/scripts/push-ota.sh   <thing-or-group> 2.0.0
-../aws-iot/scripts/watch-job.sh  <thing>
-```
-Expected serial log: download → `signature OK -> activating` → reboot → self-test
-→ `image COMMITTED` → job **SUCCEEDED**. (The device reports `IN_PROGRESS` when the
-download starts, so the execution leaves `QUEUED`.)
-
-**Rollback path**
-```bash
-../aws-iot/scripts/sign-and-publish.sh ../esp/fixtures/firmware-bad-v2.0.0.bin 2.0.0-bad
-../aws-iot/scripts/push-ota.sh   <thing> 2.0.0-bad
-```
-Expected serial log: download → activate → reboot into v2.0.0(bad) →
-`core-function check FAILED (vBAD)` → `image REJECTED -> rolling back` → reboot →
-back on the previous image, still alive → job **FAILED/TIMED_OUT**.
-
-## Notes
-
-- **Watchdog / anti-brick.** On a trial boot the Task WDT is armed *before* Wi-Fi
-  (180 s) and disarmed on commit; the bootloader RTC WDT (`CONFIG_BOOTLOADER_WDT_ENABLE`)
-  covers pre-`app_main` boot. A hang anywhere in bring-up → reset → rollback.
-- **Partition table** (`partitions.csv`): two 1.56 MB `ota_0`/`ota_1` slots +
-  `otadata`. No factory/recovery image (out of scope).
-- **Secrets & Flash Encryption / Secure Boot are OFF** on dev units (a separate
-  hardening pass). Where they slot in is noted in `partitions.csv` and the top
-  README. The OTA code-signature check still runs and is exercised here.
-- **DS peripheral / `esp_secure_cert`**: the transport already carries
-  `use_secure_element` + `ds_data` (see `mqtt_client.c`), so moving the key into
-  hardware later is a config change, not a protocol change.
-
-## Troubleshooting
-
-| symptom | cause / fix |
-|---------|-------------|
-| TLS handshake fails | wrong/placeholder `client.crt`/`client.key`, or `AttachThingPrincipal` not done (see aws-iot README) |
-| `MQTT_Connect` returns, then disconnects | device IoT policy missing `iot:Connect` for clientId == thing name |
-| Job stuck `QUEUED`, no download | policy missing `$aws/things/<thing>/jobs/*` or `…/streams/*` topic perms |
-| `signature verification FAILED` | `src/certs/aws_codesign.crt` doesn't match the Signer profile used to sign |
-| Healthy image rolls back | self-test couldn't reach the cloud within 180 s — check Wi-Fi/endpoint |
-| component manager can't fetch `espressif/cbor` | first build needs network; re-run `pio run` |
+Anti-brick behaviour, partition table, and the `FW_SELFTEST_SHOULD_PASS`
+vGOOD/vBAD mechanism are unchanged and shared across all backends. The
+backend-by-backend **flash comparison** is in the [top-level README](../README.md).

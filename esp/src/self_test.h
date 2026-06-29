@@ -28,8 +28,12 @@ void self_test_arm_watchdog(void);
 void self_test_feed_watchdog(void);
 void self_test_disarm_watchdog(void);
 
-/* The application core-function check. vGOOD returns true; vBAD returns false
- * (built with FW_SELFTEST_SHOULD_PASS=0) to demonstrate rollback. */
+/* Register an application-provided health check (used by the device_iot facade).
+ * If set, self_test_core_function_ok() defers to it after the heap check. */
+void self_test_set_health_cb(bool (*cb)(void));
+
+/* The post-OTA core-function check. Without an app callback: vGOOD returns true,
+ * vBAD returns false (FW_SELFTEST_SHOULD_PASS=0) to demonstrate rollback. */
 bool self_test_core_function_ok(void);
 
 /* Commit the running image (cancel rollback). Call only after the self-test

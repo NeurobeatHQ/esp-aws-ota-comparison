@@ -1,96 +1,73 @@
 /*
- * app_main.c — ESP32-S3 · AWS IoT Core · Modular OTA (rollback-safe) POC.
+ * app_main.c — the example application.
  *
- * Boot sequence:
- *   1. NVS + netif + default event loop
- *   2. if PENDING_VERIFY (trial boot): ARM the self-test watchdog up front so a
- *      hang anywhere in bring-up rolls the image back
- *   3. Wi-Fi  ->  MQTT(AWS IoT Core, mutual TLS)
- *   4. ota_orchestrator_start(): resolves the trial boot (self-test -> commit or
- *      reject/rollback), then services OTA jobs
- *   5. publish a heartbeat so the committed version is visible in the cloud
+ * This file uses ONLY device_iot.h and is byte-for-byte identical across all
+ * four OTA backends. Pick a backend at build time:
+ *     pio run -e mqtt | https | jobs | manual
  *
- * pure ESP-IDF: app_main() entry, FreeRTOS tasks, ESP_LOGx — no Arduino.
+ * The app is unaware of coreMQTT vs esp-mqtt, AWS Jobs vs a custom protocol, or
+ * MQTT-streams vs HTTPS download — that is the point of the device_iot facade.
  */
+#include "device_iot.h"
+#include "app_config.h"
+
 #include <stdio.h>
+#include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "nvs_flash.h"
-#include "esp_event.h"
-#include "esp_netif.h"
-#include "esp_log.h"
-
-#include "app_config.h"
-#include "wifi.h"
-#include "mqtt_client.h"
-#include "self_test.h"
-#include "ota_orchestrator.h"
 
 static const char *TAG = "app";
 
-static void heartbeat_loop(void)
+/* The application's post-OTA health gate (registered with device_iot). A real
+ * app checks its critical services here; the demo honours the vGOOD/vBAD flag. */
+static bool app_health_check(void)
 {
-    char topic[160];
-    int topic_len = snprintf(topic, sizeof(topic), "dt/%s/heartbeat", THING_NAME);
+    return FW_SELFTEST_SHOULD_PASS;
+}
 
-    for (;;) {
-        if (mqtt_client_is_connected()) {
-            char payload[96];
-            int n = snprintf(payload, sizeof(payload),
-                             "{\"fw\":\"%d.%d.%d\",\"variant\":\"%s\",\"up\":%lld}",
-                             APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_BUILD,
-                             FW_SELFTEST_SHOULD_PASS ? "vGOOD" : "vBAD",
-                             (long long)(esp_log_timestamp()));
-            mqtt_client_publish(topic, (uint16_t)topic_len, payload, (size_t)n, 0);
-        }
-        vTaskDelay(pdMS_TO_TICKS(30000));
+/* Example app command handler (subscribed below). cb receives the full topic. */
+static void on_command(const char *topic, const uint8_t *data, size_t len)
+{
+    ESP_LOGI(TAG, "command on %s: %.*s", topic, (int)len, (const char *)data);
+}
+
+/* Connection hook: fires on first connect AND every reconnect (subscriptions are
+ * already replayed by the facade), and on disconnect. Publish a retained-style
+ * "online" birth message at QoS1 so it survives backpressure. */
+static void on_connection(bool connected)
+{
+    if (!connected) {
+        ESP_LOGW(TAG, "offline");
+        return;
     }
+    char birth[96];
+    int n = snprintf(birth, sizeof(birth), "{\"online\":true,\"backend\":\"%s\",\"fw\":\"%d.%d.%d\"}",
+                     device_iot_backend_name(), APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_BUILD);
+    device_iot_publish("status", birth, (size_t)n, 1);
 }
 
 void app_main(void)
 {
-    /* --- base init --- */
-    esp_err_t nvs = nvs_flash_init();
-    if (nvs == ESP_ERR_NVS_NO_FREE_PAGES || nvs == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ESP_ERROR_CHECK(nvs_flash_init());
-    }
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    device_iot_set_health_check(app_health_check);
+    device_iot_set_connection_cb(on_connection);   /* before init: birth on connect */
 
-    self_test_log_boot_info();
+    ESP_ERROR_CHECK(device_iot_init(NULL));   /* NULL = build-time identity (secrets.h) */
 
-    /* --- arm the self-test watchdog BEFORE the long bring-up on a trial boot --- */
-    bool trial = self_test_is_trial_boot();
-    if (trial) {
-        self_test_arm_watchdog();
-    }
+    device_iot_subscribe("cmd", on_command);
 
-    /* --- Wi-Fi --- */
-    if (wifi_connect_blocking() != ESP_OK) {
-        if (trial) {
-            ESP_LOGE(TAG, "no Wi-Fi on trial image -> rolling back");
-            self_test_reject_and_rollback();   /* does not return */
+    ESP_LOGI(TAG, "running on '%s' backend, v%d.%d.%d (%s)",
+             device_iot_backend_name(), APP_VERSION_MAJOR, APP_VERSION_MINOR,
+             APP_VERSION_BUILD, FW_SELFTEST_SHOULD_PASS ? "vGOOD" : "vBAD");
+
+    for (;;) {
+        if (device_iot_is_connected()) {
+            char payload[128];
+            int n = snprintf(payload, sizeof(payload),
+                             "{\"fw\":\"%d.%d.%d\",\"backend\":\"%s\",\"up\":%lld}",
+                             APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_BUILD,
+                             device_iot_backend_name(), (long long)esp_log_timestamp());
+            device_iot_publish("heartbeat", payload, (size_t)n, 1);   /* QoS1 */
         }
-        ESP_LOGE(TAG, "no Wi-Fi; restarting in 5s");
-        vTaskDelay(pdMS_TO_TICKS(5000));
-        esp_restart();
+        vTaskDelay(pdMS_TO_TICKS(30000));
     }
-    if (trial) self_test_feed_watchdog();
-
-    /* --- MQTT to AWS IoT Core (mutual TLS) --- */
-    if (mqtt_client_start(ota_orchestrator_on_publish) != ESP_OK) {
-        ESP_LOGW(TAG, "initial MQTT connect did not complete (will keep retrying)");
-        /* On a trial boot, ota_orchestrator_start() sees !connected -> self-test
-         * fails -> rollback. On a normal boot, the background task reconnects. */
-    }
-    if (trial) self_test_feed_watchdog();
-
-    /* --- resolve trial boot (commit/rollback) + start servicing OTA jobs --- */
-    ota_orchestrator_start();
-
-    ESP_LOGI(TAG, "up and running on v%d.%d.%d (%s)",
-             APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_BUILD,
-             FW_SELFTEST_SHOULD_PASS ? "vGOOD" : "vBAD");
-
-    heartbeat_loop();
 }

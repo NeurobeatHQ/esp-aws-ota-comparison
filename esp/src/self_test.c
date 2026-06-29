@@ -80,17 +80,31 @@ void self_test_disarm_watchdog(void)
     }
 }
 
+/* Optional application-provided health check (device_iot_set_health_check). */
+static bool (*s_app_health_cb)(void);
+
+void self_test_set_health_cb(bool (*cb)(void))
+{
+    s_app_health_cb = cb;
+}
+
 bool self_test_core_function_ok(void)
 {
-    /* A real device would exercise its critical peripherals/services here. We do
-     * a token health check (heap) AND honour the build-time variant flag so the
-     * vBAD fixture deterministically fails this gate. */
+    /* Always do a token platform check (heap), then defer to the application's
+     * health check if one was registered; otherwise honour the build-time
+     * variant flag so the vBAD fixture deterministically fails this gate. */
     size_t free_heap = heap_caps_get_free_size(MALLOC_CAP_DEFAULT);
     ESP_LOGI(TAG, "core-function check: free heap = %u", (unsigned)free_heap);
 
     if (free_heap < 20 * 1024) {
         ESP_LOGE(TAG, "core-function check FAILED: heap exhausted");
         return false;
+    }
+
+    if (s_app_health_cb != NULL) {
+        bool ok = s_app_health_cb();
+        ESP_LOGI(TAG, "app health check -> %s", ok ? "PASS" : "FAIL");
+        return ok;
     }
 
 #if FW_SELFTEST_SHOULD_PASS

@@ -1,6 +1,0 @@
-## IDF component-manager manifest — variant B.
-## No espressif/cbor: only the AWS MQTT File Streams library needed CBOR, and B
-## doesn't use it. cJSON is the IDF-native `json` component (no manifest entry).
-dependencies:
-  idf:
-    version: ">=5.3"

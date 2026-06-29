@@ -4,105 +4,107 @@ import * as iot from 'aws-cdk-lib/aws-iot';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
 
+export type Backend = 'mqtt' | 'https' | 'jobs' | 'manual';
+
 export interface OtaStackProps extends StackProps {
   thingName: string;
+  backend: Backend;
 }
 
 /**
- * Provisions the *resources* for the ESP32-S3 Modular OTA POC:
- *   - an IoT Thing + thing group
- *   - a versioned S3 bucket for firmware artifacts (afr-ota* name)
- *   - the thing-scoped device IoT policy (app topics + reserved jobs/streams)
- *   - the OTA service role AWS IoT assumes for CreateOTAUpdate
+ * Composite OTA infrastructure — ONE stack, four backends (mirrors the firmware's
+ * `pio run -e <backend>`). Reused across all four: the Thing, the thing group, and
+ * the versioned firmware S3 bucket. Backend-specific (and simply absent otherwise):
  *
- * The *actions* that need a private key or operate on a specific build live in
- * scripts/ (device cert registration, the Signer profile, sign+publish, the OTA
- * update). See ../README.md.
+ *   device policy scope :  app topics (all) + jobs/* (mqtt,https,jobs) + streams/* (mqtt)
+ *   OTA service role    :  mqtt, https only (create-ota-update assumes it)
+ *
+ * Deploy:  BACKEND=jobs npx cdk deploy     (or: npx cdk deploy -c backend=jobs)
  */
-export class Esp32OtaPocStack extends Stack {
+export class Esp32OtaStack extends Stack {
   constructor(scope: Construct, id: string, props: OtaStackProps) {
     super(scope, id, props);
 
-    const thingName = props.thingName;
+    const { thingName, backend } = props;
     const region = this.region;
     const account = this.account;
 
-    // --- Thing + thing group --------------------------------------------------
+    const usesJobs = backend === 'mqtt' || backend === 'https' || backend === 'jobs';
+    const usesStreams = backend === 'mqtt';                       // AWS MQTT File Streams
+    const usesSigner = backend === 'mqtt' || backend === 'https'; // create-ota-update + Signer
+
+    // --- shared resources ----------------------------------------------------
     const thingGroup = new iot.CfnThingGroup(this, 'ThingGroup', {
       thingGroupName: `${thingName}-group`,
     });
     const thing = new iot.CfnThing(this, 'Thing', { thingName });
 
-    // --- Firmware bucket ------------------------------------------------------
-    // The "afr-ota" name prefix is covered by the AmazonFreeRTOSOTAUpdate managed
-    // policy's S3 grant. Versioning is REQUIRED — OTA/Signer reference the object
-    // version id.
     const bucket = new s3.Bucket(this, 'FirmwareBucket', {
-      bucketName: `afr-ota-${thingName}-${account}-${region}`.toLowerCase(),
-      versioned: true,
+      bucketName: `fw-${thingName}-${account}-${region}`.toLowerCase(),
+      versioned: true,                       // OTA/Signer + presign reference the object version
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
-      removalPolicy: RemovalPolicy.DESTROY, // POC convenience
+      removalPolicy: RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
     });
 
-    // --- Device IoT policy ----------------------------------------------------
-    // ${iot:Connection.Thing.ThingName} is an AWS IoT policy variable — keep it a
-    // literal string (single quotes => no TS interpolation). It resolves to the
-    // connecting thing only because iot:Connect is pinned to clientId == thing
-    // name, which is what makes one policy safe for a whole fleet.
+    // --- device policy (scope grows with the backend) ------------------------
     const thingVar = '${iot:Connection.Thing.ThingName}';
-    const clientArn = `arn:aws:iot:${region}:${account}:client/${thingVar}`;
-    // NOTE: publish/receive use topic/...  ; subscribe uses topicfilter/...
-    const pubTopics = [
-      `arn:aws:iot:${region}:${account}:topic/dt/${thingName}/*`,
-      `arn:aws:iot:${region}:${account}:topic/$aws/things/${thingVar}/jobs/*`,
-      `arn:aws:iot:${region}:${account}:topic/$aws/things/${thingVar}/streams/*`,
-    ];
-    const subFilters = [
-      `arn:aws:iot:${region}:${account}:topicfilter/dt/${thingName}/*`,
-      `arn:aws:iot:${region}:${account}:topicfilter/$aws/things/${thingVar}/jobs/*`,
-      `arn:aws:iot:${region}:${account}:topicfilter/$aws/things/${thingVar}/streams/*`,
-    ];
-
+    const pub: string[] = [`arn:aws:iot:${region}:${account}:topic/dt/${thingName}/*`];
+    const sub: string[] = [`arn:aws:iot:${region}:${account}:topicfilter/dt/${thingName}/*`];
+    if (usesJobs) {
+      pub.push(`arn:aws:iot:${region}:${account}:topic/$aws/things/${thingVar}/jobs/*`);
+      sub.push(`arn:aws:iot:${region}:${account}:topicfilter/$aws/things/${thingVar}/jobs/*`);
+    }
+    if (usesStreams) {
+      pub.push(`arn:aws:iot:${region}:${account}:topic/$aws/things/${thingVar}/streams/*`);
+      sub.push(`arn:aws:iot:${region}:${account}:topicfilter/$aws/things/${thingVar}/streams/*`);
+    }
+    // Name is backend-INDEPENDENT: swapping the backend updates this policy's
+    // *document* in place, so the device cert (attached out-of-band by
+    // register-device.sh) keeps working — no detach/rename churn.
     const policy = new iot.CfnPolicy(this, 'DevicePolicy', {
       policyName: `${thingName}-policy`,
       policyDocument: {
         Version: '2012-10-17',
         Statement: [
-          { Effect: 'Allow', Action: 'iot:Connect', Resource: clientArn },
-          { Effect: 'Allow', Action: ['iot:Publish', 'iot:Receive'], Resource: pubTopics },
-          { Effect: 'Allow', Action: 'iot:Subscribe', Resource: subFilters },
+          { Effect: 'Allow', Action: 'iot:Connect',
+            Resource: `arn:aws:iot:${region}:${account}:client/${thingVar}` },
+          { Effect: 'Allow', Action: ['iot:Publish', 'iot:Receive'], Resource: pub },
+          { Effect: 'Allow', Action: 'iot:Subscribe', Resource: sub },
         ],
       },
     });
 
-    // --- OTA service role -----------------------------------------------------
-    // Assumed by AWS IoT to create the OTA stream, read S3, and create the job.
-    const otaRole = new iam.Role(this, 'OtaServiceRole', {
-      roleName: `${thingName}-ota-service-role`,
-      assumedBy: new iam.ServicePrincipal('iot.amazonaws.com'),
-      managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonFreeRTOSOTAUpdate'),
-      ],
-    });
-    // The role must be able to read/pass itself (per the FreeRTOS OTA docs).
-    otaRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['iam:GetRole', 'iam:PassRole'],
-      resources: [otaRole.roleArn],
-    }));
-    // afr-ota* bucket is already covered by the managed policy, but be explicit.
-    otaRole.addToPolicy(new iam.PolicyStatement({
-      actions: ['s3:GetObject', 's3:GetObjectVersion', 's3:PutObject'],
-      resources: [`${bucket.bucketArn}/*`],
-    }));
+    // --- OTA service role (mqtt/https only) ----------------------------------
+    let otaRoleArn: string | undefined;
+    if (usesSigner) {
+      const otaRole = new iam.Role(this, 'OtaServiceRole', {
+        roleName: `${thingName}-ota-role`,
+        assumedBy: new iam.ServicePrincipal('iot.amazonaws.com'),
+        managedPolicies: [
+          iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonFreeRTOSOTAUpdate'),
+        ],
+      });
+      otaRole.addToPolicy(new iam.PolicyStatement({
+        actions: ['iam:GetRole', 'iam:PassRole'], resources: [otaRole.roleArn],
+      }));
+      otaRole.addToPolicy(new iam.PolicyStatement({
+        actions: ['s3:GetObject', 's3:GetObjectVersion', 's3:PutObject'],
+        resources: [`${bucket.bucketArn}/*`],
+      }));
+      otaRoleArn = otaRole.roleArn;
+    }
 
-    // --- Outputs (consumed by scripts/_lib.sh via describe-stacks) ------------
+    // --- outputs (consumed by scripts/_lib.sh) -------------------------------
+    new CfnOutput(this, 'Backend', { value: backend });
     new CfnOutput(this, 'ThingName', { value: thingName });
     new CfnOutput(this, 'ThingGroupName', { value: thingGroup.thingGroupName! });
     new CfnOutput(this, 'PolicyName', { value: policy.policyName! });
     new CfnOutput(this, 'FirmwareBucketName', { value: bucket.bucketName });
-    new CfnOutput(this, 'OtaServiceRoleArn', { value: otaRole.roleArn });
+    if (otaRoleArn) {
+      new CfnOutput(this, 'OtaServiceRoleArn', { value: otaRoleArn });
+    }
   }
 }
