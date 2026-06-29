@@ -30,29 +30,8 @@ AWS IoT Jobs + MQTT File Streams + coreMQTT over mutual TLS — on pure ESP-IDF 
   `IN_PROGRESS → SUCCEEDED/FAILED`, so a pushed job is promoted off `QUEUED` rather
   than risking a spurious `TIMED_OUT`.
 
-## Two decisions this POC settled
 
-The original brief included a local Greengrass core and the classic AWS *OTA Agent*.
-Both were checked against primary sources and changed:
-
-1. **Modular OTA, not the classic `OTA_Init` agent.** The classic agent exists only
-   in `esp-aws-iot` ≤ `release/202210.01-LTS` (ESP-IDF ≤ 5.1, end-of-life). ESP-IDF
-   5.3.x is supported only on `202406.05-LTS`, which removed the agent and ships the
-   AWS IoT Jobs + MQTT File Streams libraries instead. The firmware uses that current
-   path (ref: `FreeRTOS/iot-reference-esp32`); the requested architecture — Jobs
-   orchestration, Signer ECDSA-P256 verify, self-test/commit/rollback — is intact,
-   only the on-device API is the modern one.
-
-2. **Greengrass dropped.** Relaying the reserved `$aws/things/<thing>/jobs/*` topics
-   over the Greengrass MQTT Bridge does not work: AWS publishes Jobs request/response
-   messages directly to the publishing client, bypassing the broker, and the Bridge is
-   a separate client with the *core's* identity — so it can't carry a client device's
-   Jobs control plane. (AWS's analogue, client-device Shadows, bridges reserved topics
-   LocalMqtt↔Pubsub local-only plus a Shadow Manager; there's no Jobs equivalent.) The
-   managed agent also can't be pointed at a LAN file server. Greengrass is orthogonal
-   to OTA, so scope is AWS IoT Core only.
-
-## Architecture decisions (carried forward)
+## Architecture decisions
 
 - **Identity = mutual TLS** with an embedded plaintext device cert + key. The
   transport keeps `use_secure_element` + `ds_data` fields, so moving the key to the
@@ -194,4 +173,4 @@ backend — the steps are otherwise identical.)
 
 Secure Boot / Flash Encryption eFuse burns; DS-peripheral provisioning; recovery/
 factory image + captive portal; A/B identity re-key; custom server-driven control
-plane; AWS IoT Greengrass (decision #2). Managed AWS IoT Core path only.
+plane. Managed AWS IoT Core path only.

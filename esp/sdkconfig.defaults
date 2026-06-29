@@ -27,8 +27,18 @@ CONFIG_MBEDTLS_THREADING_PTHREAD=y
 CONFIG_PTHREAD_TASK_STACK_SIZE_DEFAULT=8192
 
 # --- TLS: client-only, AWS uses RSA-2048 server / P-256 code-sign ------------
-CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
-CONFIG_MBEDTLS_SSL_VARIABLE_BUFFER_LENGTH=y
+# Keep the INCOMING TLS buffer at the full 16 KB AND statically allocated. The OTA
+# HTTPS data path streams from S3, which sends large TLS records and does NOT honor
+# the Maximum Fragment Length extension — so the device must be able to receive a
+# full 16 KB record. With DYNAMIC/VARIABLE buffer the 16 KB IN buffer is freed and
+# re-allocated between reads; the re-grow fails on the first S3 body read under the
+# heap fragmentation of the concurrent MQTT session (handshake/headers work because
+# it's already allocated then). The OUT buffer stays small (4 KB) to save RAM.
+CONFIG_MBEDTLS_SSL_IN_CONTENT_LEN=16384
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=4096
+CONFIG_MBEDTLS_ASYMMETRIC_CONTENT_LEN=y
+# CONFIG_MBEDTLS_DYNAMIC_BUFFER is not set
+# CONFIG_MBEDTLS_SSL_VARIABLE_BUFFER_LENGTH is not set
 
 # --- Task watchdog: we drive it manually during the self-test ----------------
 CONFIG_ESP_TASK_WDT_INIT=n

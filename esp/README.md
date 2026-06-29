@@ -12,11 +12,7 @@ pio run -e jobs     # B: AWS IoT Jobs lib · esp_https_ota   · no on-device ver
 pio run -e manual   # A: custom MQTT protocol · esp_https_ota · no AWS libraries
 ```
 
-(These four replace the former `mqtt-esp/`, `https-esp/`, `jobs-esp/`, `manual-esp/`
-directories — same code, now swappable. The cloud is likewise unified into one
-[`../aws-iot`](../aws-iot/README.md), deployed with a matching `BACKEND=<backend>`.)
-
-## The normalized API (why apps are portable)
+## The normalized API
 
 An application includes only `device_iot.h`:
 
@@ -30,9 +26,11 @@ static void on_conn(bool up) { if (up) device_iot_publish("status", "online", 6,
 void app_main(void) {
     device_iot_set_health_check(app_healthy);
     device_iot_set_connection_cb(on_conn);   // birth on connect; fires on reconnect too
-    device_iot_init(NULL);                    // Wi-Fi + cloud + OTA backend + trial-boot
-                                              // (NULL = build-time identity; pass a
-                                              //  device_iot_config_t to provision at runtime)
+
+    device_iot_config_t cfg;
+    device_iot_default_config(&cfg);         // build-time identity (secrets.h + embedded certs)
+    device_iot_init(&cfg);                   // override cfg fields first to provision per device
+
     device_iot_subscribe("cmd", on_cmd);      // dt/<thing>/cmd
     for (;;) {
         device_iot_publish("heartbeat", json, len, 1);    // dt/<thing>/heartbeat, QoS1
@@ -41,12 +39,13 @@ void app_main(void) {
 }
 ```
 
-The facade is the whole portability story, and it is **the same on every backend**:
+The facade is the same on every backend:
 
-- **`device_iot_init(cfg)`** — `NULL` uses the build-time identity (`secrets.h` +
-  embedded certs); pass a `device_iot_config_t` to supply the endpoint, Thing name,
-  and cert/key (or a DS-peripheral handle) at runtime — one image, per-device
-  identity. Each field falls back to its compile-time default when unset.
+- **`device_iot_default_config(&cfg)` → `device_iot_init(&cfg)`** — the default loader
+  fills `cfg` with the build-time identity (`secrets.h` + embedded certs); override
+  fields (endpoint, Thing name, cert/key, or a DS-peripheral handle) before init to
+  provision per device — one image, per-device identity. No NULL sentinel; the
+  defaults are explicit in the struct.
 - **`device_iot_publish(subtopic, …, qos)`** — non-blocking; enqueues into a bounded
   outbox and returns. **QoS1 is delivered at-least-once** (retransmitted until the
   broker acks, surviving reconnects). Under sustained backpressure it returns

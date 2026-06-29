@@ -1,10 +1,21 @@
 -----BEGIN CERTIFICATE-----
-PLACEHOLDER — REPLACE WITH YOUR AWS IoT DEVICE CERTIFICATE.
-
-This file is embedded into the firmware (EMBED_TXTFILES) as the mutual-TLS
-client certificate. Overwrite it with the certificate you registered for the
-Thing (see ../../README.md and ../../../aws-iot/README.md), e.g. the
-certificate.pem.crt returned by `aws iot create-keys-and-certificate`.
-
-Do NOT commit a real device certificate/key to a shared repo.
+MIIDWTCCAkGgAwIBAgIUeUFKLamvs38/4QPvrA7Ob8E1osUwDQYJKoZIhvcNAQEL
+BQAwTTFLMEkGA1UECwxCQW1hem9uIFdlYiBTZXJ2aWNlcyBPPUFtYXpvbi5jb20g
+SW5jLiBMPVNlYXR0bGUgU1Q9V2FzaGluZ3RvbiBDPVVTMB4XDTI2MDYyOTIwMzg1
+M1oXDTQ5MTIzMTIzNTk1OVowHjEcMBoGA1UEAwwTQVdTIElvVCBDZXJ0aWZpY2F0
+ZTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAKSEUBRgwjAsohgSVc9R
+fvl/8z0wQOhHlSZiuNcDOgH0sZ1YhYogtmJoeeG9/r6yiu3fN5IpK1a7/tz5ZO35
+tjpCqMy7WknneCt4uX0aM7q0hopfaRGrEVBH+apMJLIswKz6RdwYRhppPWq2J+BD
+nTrKy80/o8DbgaWFxDWIWGbTyNCapuOUaE/W+oiCC4CqKyuDcSj/3tiIlFJ4I2bc
+1O2uUD7MXJonXzV7jBxxxYguPTPKWDRCmZ/cvf76lNHZXWbU/S8FyrqdINxPI6wP
+DoRLMznwRr262GRjGfAeFQShIuvtwNazRk4f/3l4EuzL3VfDv8TUVfmUpD/u5NyB
+upUCAwEAAaNgMF4wHwYDVR0jBBgwFoAUr7s4jM+U7e90l1B6LdP4hRURM+0wHQYD
+VR0OBBYEFNJW2mc3YC2sMyai6vTGROnDaSbWMAwGA1UdEwEB/wQCMAAwDgYDVR0P
+AQH/BAQDAgeAMA0GCSqGSIb3DQEBCwUAA4IBAQDVe210hYSqqnywyrESFsHFvUW+
+EUEb21KhMK0exBo96w1+feYKd7yVEiT18VbdL2f5wxqHkeaX/+4deYhUbp1VYbqA
+KBWNY8lwr6nQcVzQpU3m6IMqIEg/da3TkVPRbXkTdOtpozx/JG6pS5h44e6E8kt6
+QSax0ehhCs+NLVx8gHp71zOyDF7I15jL4rj8N/RLK/DaN56Vhp+cd/55BDpWfZV4
+rKiAB9Xq2dhK6E3NpvLMzrN3s63/U0Xb6JhuOZgONQ1cqMdWW1Nn58n/U2uKVd+W
+HToiLoHrciz9cAdsB+e/dARISK+PR6zGXrE/KRqgW1CcFIeERusWxeM5aMHW
 -----END CERTIFICATE-----
+

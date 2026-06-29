@@ -29,12 +29,17 @@ case "$BACKEND" in
     VERSION_ID="$(aws s3api head-object --bucket "$BUCKET" --key "$KEY" --query VersionId --output text)" \
       || { echo "error: $KEY not in s3://$BUCKET — run upload-firmware.sh first" >&2; exit 1; }
     OTA_ID="esp32-ota-${BACKEND}-${VERSION//./-}-$(date +%s)"
+    # fileType is REQUIRED by the on-device HTTP job parser (otaJobParser's
+    # populateHttpStreamingFields reads "fileType" before auth_scheme/update_data_url);
+    # without it the device rejects the doc as "not an OTA job document".
     FILES="$(jq -nc --arg b "$BUCKET" --arg k "$KEY" --arg v "$VERSION_ID" --arg p "$SIGNING_PROFILE_NAME" '
-      [{fileName:"/firmware.bin", fileVersion:"1",
+      [{fileName:"/firmware.bin", fileVersion:"1", fileType:0,
         fileLocation:{s3Location:{bucket:$b, key:$k, version:$v}},
         codeSigning:{startSigningJobParameter:{signingProfileName:$p, destination:{s3Destination:{bucket:$b}}}}}]')"
     PRESIGN=""
-    [ "$BACKEND" = "https" ] && PRESIGN="--aws-job-presigned-url-config {\"expiresInSec\":3600,\"roleArn\":\"$OTA_ROLE_ARN\"}"
+    # awsJobPresignedUrlConfig takes only expiresInSec; the presigning role is the
+    # top-level --role-arn (OTA service role) below, which has the S3 read grant.
+    [ "$BACKEND" = "https" ] && PRESIGN="--aws-job-presigned-url-config {\"expiresInSec\":3600}"
     log "[$BACKEND] create-ota-update '$OTA_ID' (--protocols $PROTO) -> $(target_arn)"
     aws iot create-ota-update --ota-update-id "$OTA_ID" --description "ESP32 OTA $BACKEND v$VERSION" \
       --targets "$(target_arn)" --target-selection SNAPSHOT --protocols "$PROTO" \

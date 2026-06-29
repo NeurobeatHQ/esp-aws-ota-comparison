@@ -27,11 +27,8 @@
 
 static const char *TAG = "mqtt";
 
-/* Certificates embedded as generated C arrays (see embed_certs.cmake).
- * Lengths include the trailing NUL, which esp-tls expects for PEM material. */
-extern const unsigned char aws_root_ca_pem[];   extern const unsigned int aws_root_ca_pem_len;
-extern const unsigned char device_cert_pem[];   extern const unsigned int device_cert_pem_len;
-extern const unsigned char device_key_pem[];    extern const unsigned int device_key_pem_len;
+/* The TLS identity (endpoint, certs/key) comes from the resolved transport_config_t;
+ * device_iot supplies the build-embedded certs via device_iot_default_config(). */
 
 static MQTTContext_t s_mqtt_ctx;
 static NetworkContext_t s_net_ctx;
@@ -212,34 +209,21 @@ static void fill_network_context(void)
     s_net_ctx.xPort      = s_cfg.port;
     s_net_ctx.disableSni = pdFALSE;
 
-    /* Root CA + client cert: from the config, else the build-embedded arrays.
-     * A config PEM is NUL-terminated, so its size includes the NUL (esp-tls wants it). */
-    if (s_cfg.root_ca_pem) {
-        s_net_ctx.pcServerRootCA = s_cfg.root_ca_pem;
-        s_net_ctx.pcServerRootCASize = strlen(s_cfg.root_ca_pem) + 1;
-    } else {
-        s_net_ctx.pcServerRootCA = (const char *)aws_root_ca_pem;
-        s_net_ctx.pcServerRootCASize = aws_root_ca_pem_len;
-    }
-    if (s_cfg.client_cert_pem) {
-        s_net_ctx.pcClientCert = s_cfg.client_cert_pem;
-        s_net_ctx.pcClientCertSize = strlen(s_cfg.client_cert_pem) + 1;
-    } else {
-        s_net_ctx.pcClientCert = (const char *)device_cert_pem;
-        s_net_ctx.pcClientCertSize = device_cert_pem_len;
-    }
+    /* Certs come straight from the config (NUL-terminated PEM, so the size includes
+     * the NUL, which esp-tls expects). */
+    s_net_ctx.pcServerRootCA     = s_cfg.root_ca_pem;
+    s_net_ctx.pcServerRootCASize = strlen(s_cfg.root_ca_pem) + 1;
+    s_net_ctx.pcClientCert       = s_cfg.client_cert_pem;
+    s_net_ctx.pcClientCertSize   = strlen(s_cfg.client_cert_pem) + 1;
 
-    /* Private key: DS peripheral (no PEM), else config PEM, else embedded. The
-     * use_secure_element / ds_data fields make the secure-element swap config-only. */
+    /* Private key: the DS peripheral (use_secure_element makes the swap config-only)
+     * or the PEM key. */
     if (s_cfg.use_secure_element) {
         s_net_ctx.use_secure_element = true;
         s_net_ctx.ds_data = s_cfg.ds_data;
-    } else if (s_cfg.client_key_pem) {
+    } else {
         s_net_ctx.pcClientKey = s_cfg.client_key_pem;
         s_net_ctx.pcClientKeySize = strlen(s_cfg.client_key_pem) + 1;
-    } else {
-        s_net_ctx.pcClientKey = (const char *)device_key_pem;
-        s_net_ctx.pcClientKeySize = device_key_pem_len;
     }
 
     if (s_net_ctx.xTlsContextSemaphore == NULL) {
@@ -374,22 +358,15 @@ esp_err_t transport_start(transport_publish_cb_t cb, const transport_config_t *c
         return ESP_ERR_NO_MEM;
     }
 
-    /* Bounded initial connect: on a trial boot, failing fast lets the self-test
-     * roll back promptly. The background task then reconnects forever. */
-    esp_err_t initial = mqtt_connect_with_backoff(MQTT_INITIAL_CONNECT_ATTEMPTS);
-    s_connected = (initial == ESP_OK);
-
-    /* Generous stack: the reconnect path runs the mbedTLS handshake here. */
+    /* NON-BLOCKING: the connect (and forever-reconnect) runs in mqtt_task, which
+     * fires the conn cb on its first successful connect. device_iot decides whether
+     * to wait for connectivity (trial gate) — the transport never blocks the boot.
+     * Generous stack: the connect path runs the mbedTLS handshake there. */
+    s_connected = false;
     if (xTaskCreate(mqtt_task, "mqtt", 8192, NULL, 5, NULL) != pdPASS) {
         return ESP_FAIL;
     }
-
-    /* Announce the (synchronous) first connect. If it failed, mqtt_task will fire
-     * the cb once it connects in the background — so it fires exactly once either way. */
-    if (s_connected && s_conn_cb != NULL) {
-        s_conn_cb(true);
-    }
-    return initial;   /* ESP_OK if connected; caller treats !connected as no cloud yet */
+    return ESP_OK;
 }
 
 void transport_set_conn_cb(transport_conn_cb_t cb)

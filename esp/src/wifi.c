@@ -1,4 +1,9 @@
-/* wifi.c — minimal Wi-Fi station bring-up (blocking connect with retry). */
+/* wifi.c — Wi-Fi station: non-blocking start + indefinite background reconnect.
+ *
+ * The connect policy lives above this layer (device_iot): a trial boot blocks hard
+ * on wifi_wait_connected() and rolls back if it can't reach the network; a normal
+ * boot waits briefly and then runs offline. Either way this module keeps trying to
+ * (re)connect in the background, so the device comes online whenever the AP is up. */
 #include "wifi.h"
 #include "app_config.h"
 
@@ -13,32 +18,30 @@
 static const char *TAG = "wifi";
 
 #define WIFI_CONNECTED_BIT  BIT0
-#define WIFI_FAIL_BIT       BIT1
 
 static EventGroupHandle_t s_wifi_events;
-static int s_retry_num;
+static volatile bool s_connected;
 
 static void wifi_event_handler(void *arg, esp_event_base_t base, int32_t id, void *data)
 {
     if (base == WIFI_EVENT && id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
     } else if (base == WIFI_EVENT && id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_retry_num < WIFI_MAXIMUM_RETRY) {
-            s_retry_num++;
-            ESP_LOGW(TAG, "disconnected; retry %d/%d", s_retry_num, WIFI_MAXIMUM_RETRY);
-            esp_wifi_connect();
-        } else {
-            xEventGroupSetBits(s_wifi_events, WIFI_FAIL_BIT);
-        }
+        s_connected = false;
+        xEventGroupClearBits(s_wifi_events, WIFI_CONNECTED_BIT);
+        /* Reconnect forever (no permanent give-up). Paced by the driver's scan time
+         * so this is a gentle background retry, not a tight loop. */
+        ESP_LOGD(TAG, "disconnected; reconnecting");
+        esp_wifi_connect();
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)data;
         ESP_LOGI(TAG, "got IP " IPSTR, IP2STR(&event->ip_info.ip));
-        s_retry_num = 0;
+        s_connected = true;
         xEventGroupSetBits(s_wifi_events, WIFI_CONNECTED_BIT);
     }
 }
 
-esp_err_t wifi_connect_blocking(void)
+esp_err_t wifi_start(void)
 {
     s_wifi_events = xEventGroupCreate();
     if (s_wifi_events == NULL) {
@@ -63,18 +66,20 @@ esp_err_t wifi_connect_blocking(void)
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
+    ESP_ERROR_CHECK(esp_wifi_start());      /* STA_START -> esp_wifi_connect() */
 
     ESP_LOGI(TAG, "connecting to SSID '%s'...", WIFI_SSID);
+    return ESP_OK;
+}
 
-    EventBits_t bits = xEventGroupWaitBits(s_wifi_events,
-                                           WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
-                                           pdFALSE, pdFALSE, portMAX_DELAY);
+esp_err_t wifi_wait_connected(uint32_t timeout_ms)
+{
+    EventBits_t bits = xEventGroupWaitBits(s_wifi_events, WIFI_CONNECTED_BIT,
+                                           pdFALSE, pdTRUE, pdMS_TO_TICKS(timeout_ms));
+    return (bits & WIFI_CONNECTED_BIT) ? ESP_OK : ESP_ERR_TIMEOUT;
+}
 
-    if (bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(TAG, "Wi-Fi connected");
-        return ESP_OK;
-    }
-    ESP_LOGE(TAG, "Wi-Fi connect failed after %d retries", WIFI_MAXIMUM_RETRY);
-    return ESP_FAIL;
+bool wifi_is_connected(void)
+{
+    return s_connected;
 }

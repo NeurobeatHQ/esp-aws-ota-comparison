@@ -63,11 +63,18 @@
 /* --------------------------------------------------------------------------
  * Tunables
  * ------------------------------------------------------------------------ */
-#define WIFI_MAXIMUM_RETRY              10
 #define MQTT_KEEP_ALIVE_SECONDS         60
 #define MQTT_NETWORK_BUFFER_SIZE        8192   /* must hold a job doc + headers */
 #define MQTT_PROCESS_LOOP_TIMEOUT_MS    500    /* coreMQTT transport */
-#define MQTT_INITIAL_CONNECT_TIMEOUT_MS ( 60 * 1000 )  /* esp-mqtt transport */
+
+/* Boot connectivity policy (device_iot). A NORMAL boot waits briefly for Wi-Fi
+ * then runs offline (Wi-Fi + the transport keep reconnecting in the background) —
+ * the app never blocks on connectivity. A TRIAL boot must reach Wi-Fi AND the
+ * cloud within these budgets or it rolls back (the new image must prove it can
+ * phone home). Both trial budgets sit under SELF_TEST_WATCHDOG_TIMEOUT_MS. */
+#define WIFI_CONNECT_TIMEOUT_MS         (  8 * 1000 )   /* normal: brief, then continue */
+#define WIFI_TRIAL_CONNECT_TIMEOUT_MS   ( 45 * 1000 )   /* trial: block, else roll back */
+#define CLOUD_TRIAL_CONNECT_TIMEOUT_MS  ( 60 * 1000 )   /* trial: cloud connect budget */
 
 /* Publish outbox bound (both transports). Backpressure surfaces uniformly as a
  * bounded queue: transport_publish enqueues and returns; once the outbox holds
@@ -86,11 +93,6 @@
  * guard.) Explicit failures (no Wi-Fi, no cloud, bad core check) reject and roll
  * back sooner than this. */
 #define SELF_TEST_WATCHDOG_TIMEOUT_MS   ( 180 * 1000 )
-
-/* Bound the *initial* connect so a trial image that cannot reach the cloud fails
- * its self-test promptly (-> rollback) instead of retrying forever. The
- * background MQTT task reconnects indefinitely once we are past the self-test. */
-#define MQTT_INITIAL_CONNECT_ATTEMPTS   8
 
 /* NVS namespace/key used to carry the in-flight OTA job id across the reboot,
  * so the trial image can report SUCCEEDED/FAILED for it. */

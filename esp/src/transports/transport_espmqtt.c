@@ -5,26 +5,19 @@
 #include <string.h>
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
 #include "esp_log.h"
 #include "mqtt_client.h"     /* esp-mqtt (IDF component "mqtt") */
 
 static const char *TAG = "mqtt_es";
 
-/* Certificates embedded as generated C arrays (see embed_certs.cmake).
- * NUL-terminated, so esp-mqtt is given length 0 (it uses strlen). */
-extern const unsigned char aws_root_ca_pem[];
-extern const unsigned char device_cert_pem[];
-extern const unsigned char device_key_pem[];
-
-#define CONNECTED_BIT  BIT0
+/* The TLS identity (endpoint, certs/key) comes from the resolved transport_config_t;
+ * device_iot supplies the build-embedded certs via device_iot_default_config(). */
 
 static esp_mqtt_client_handle_t s_client;
 static volatile bool s_connected;
 static transport_publish_cb_t s_publish_cb;
 static transport_conn_cb_t s_conn_cb;
 static transport_config_t s_cfg;        /* resolved endpoint/thing/certs (held by ref) */
-static EventGroupHandle_t s_events;
 static unsigned s_connect_count;
 
 /* Reassembly of chunked MQTT_EVENT_DATA (esp-mqtt splits payloads > buffer). */
@@ -65,11 +58,9 @@ static void mqtt_event_handler(void *arg, esp_event_base_t base, int32_t id, voi
     switch ((esp_mqtt_event_id_t)id) {
         case MQTT_EVENT_CONNECTED:
             s_connected = true;
-            xEventGroupSetBits(s_events, CONNECTED_BIT);
             if (++s_connect_count > 1) ESP_LOGW(TAG, "reconnected");
             else ESP_LOGI(TAG, "MQTT connected to AWS IoT Core as '%s'", s_cfg.thing_name);
-            /* Fire on EVERY connect incl. the first — even if the initial connect
-             * lands after transport_start's wait window (device_iot is idempotent). */
+            /* Fire on EVERY connect incl. the first — device_iot is idempotent. */
             if (s_conn_cb != NULL) s_conn_cb(true);
             break;
         case MQTT_EVENT_DISCONNECTED:
@@ -92,28 +83,20 @@ esp_err_t transport_start(transport_publish_cb_t cb, const transport_config_t *c
 {
     s_publish_cb = cb;
     s_cfg = *cfg;        /* shallow copy: endpoint/thing_name/PEM held by reference */
-    s_events = xEventGroupCreate();
-    if (s_events == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
 
     static char uri[160];
     snprintf(uri, sizeof(uri), "mqtts://%s:%d", s_cfg.endpoint, s_cfg.port);
 
-    /* Certs from the config, else the build-embedded arrays (all NUL-terminated,
-     * so esp-mqtt takes them by string and computes the length itself). */
-    const char *root = s_cfg.root_ca_pem     ? s_cfg.root_ca_pem     : (const char *)aws_root_ca_pem;
-    const char *cert = s_cfg.client_cert_pem ? s_cfg.client_cert_pem : (const char *)device_cert_pem;
-    const char *key  = s_cfg.client_key_pem  ? s_cfg.client_key_pem  : (const char *)device_key_pem;
-
+    /* Certs come straight from the config (NUL-terminated, so esp-mqtt takes them
+     * by string and computes the length itself). */
     esp_mqtt_client_config_t mcfg = {
         .broker = {
             .address.uri = uri,
-            .verification.certificate = root,                            /* server root CA */
+            .verification.certificate = s_cfg.root_ca_pem,               /* server root CA */
         },
         .credentials = {
             .client_id = s_cfg.thing_name,                               /* clientId == Thing */
-            .authentication = { .certificate = cert },                   /* mutual TLS */
+            .authentication = { .certificate = s_cfg.client_cert_pem },  /* mutual TLS */
         },
         .session.keepalive = MQTT_KEEP_ALIVE_SECONDS,
         .buffer.size = MQTT_NETWORK_BUFFER_SIZE,
@@ -124,7 +107,7 @@ esp_err_t transport_start(transport_publish_cb_t cb, const transport_config_t *c
     if (s_cfg.use_secure_element) {
         mcfg.credentials.authentication.ds_data = s_cfg.ds_data;         /* key in DS peripheral */
     } else {
-        mcfg.credentials.authentication.key = key;
+        mcfg.credentials.authentication.key = s_cfg.client_key_pem;
     }
 
     s_client = esp_mqtt_client_init(&mcfg);
@@ -133,11 +116,11 @@ esp_err_t transport_start(transport_publish_cb_t cb, const transport_config_t *c
     }
     ESP_ERROR_CHECK(esp_mqtt_client_register_event(s_client, ESP_EVENT_ANY_ID,
                                                    mqtt_event_handler, NULL));
+    /* NON-BLOCKING: esp-mqtt connects (and reconnects) in its own task and fires the
+     * conn cb on MQTT_EVENT_CONNECTED. device_iot decides whether to wait (trial
+     * gate); the transport never blocks the boot. */
     ESP_ERROR_CHECK(esp_mqtt_client_start(s_client));
-
-    EventBits_t bits = xEventGroupWaitBits(s_events, CONNECTED_BIT, pdFALSE, pdTRUE,
-                                           pdMS_TO_TICKS(MQTT_INITIAL_CONNECT_TIMEOUT_MS));
-    return (bits & CONNECTED_BIT) ? ESP_OK : ESP_FAIL;   /* keeps retrying either way */
+    return ESP_OK;
 }
 
 void transport_set_conn_cb(transport_conn_cb_t cb) { s_conn_cb = cb; }

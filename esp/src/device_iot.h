@@ -14,29 +14,33 @@
 #include <stdint.h>
 #include "esp_err.h"
 
-/* Connection identity + endpoint, supplied at runtime. Every field is optional:
- * a NULL pointer or 0 falls back to the build-time default (the secrets.h macros
- * and the certs embedded by embed_certs.cmake), so device_iot_init(NULL) behaves
- * exactly as before. Provide fields to provision per device from NVS, a secure
- * element, or a provisioning flow — one image, per-device identity.
- *
- * The string buffers (PEM, endpoint) must outlive the connection: esp-tls /
- * coreMQTT hold the cert pointers by reference. (endpoint + thing_name are copied
- * internally; the PEM buffers are referenced.) */
+/* Connection identity + endpoint, supplied explicitly at init. Populate every
+ * field (use device_iot_default_config() for the build-time identity, then
+ * override individual fields to provision per device). The string buffers (PEM,
+ * endpoint) must outlive the connection: esp-tls / coreMQTT hold the cert pointers
+ * by reference (endpoint + thing_name are copied internally). */
 typedef struct {
-    const char *endpoint;          /* NULL -> AWS_IOT_ENDPOINT */
-    uint16_t    port;              /* 0    -> AWS_MQTT_PORT (8883) */
-    const char *thing_name;        /* NULL -> THING_NAME; used as clientId + dt/<thing>/ */
-    const char *root_ca_pem;       /* NUL-terminated PEM; NULL -> build-embedded root CA */
-    const char *client_cert_pem;   /* NULL -> build-embedded device cert */
-    const char *client_key_pem;    /* NULL -> build-embedded device key */
-    bool        use_secure_element;/* key lives in the DS peripheral / esp_secure_cert */
-    void       *ds_data;           /* DS context when use_secure_element (no client_key_pem) */
+    const char *endpoint;          /* AWS IoT ATS endpoint host */
+    uint16_t    port;              /* broker port, usually 8883 */
+    const char *thing_name;        /* clientId + dt/<thing>/ + $aws/things/<thing>/ */
+    const char *root_ca_pem;       /* NUL-terminated PEM: server root CA */
+    const char *client_cert_pem;   /* NUL-terminated PEM: device cert */
+    const char *client_key_pem;    /* NUL-terminated PEM: device key (NULL iff use_secure_element) */
+    bool        use_secure_element;/* private key lives in the DS peripheral / esp_secure_cert */
+    void       *ds_data;           /* DS context when use_secure_element */
 } device_iot_config_t;
 
+/* Fill cfg with the BUILD-TIME identity: the secrets.h endpoint/port/Thing name and
+ * the certs embedded by embed_certs.cmake. Use it as-is, or as a base and override
+ * fields (e.g. cfg.thing_name = serial; cfg.client_cert_pem = cert_from_nvs) before
+ * device_iot_init(). This makes the defaults explicit instead of hidden behind a
+ * NULL sentinel. */
+void device_iot_default_config(device_iot_config_t *cfg);
+
 /* Bring up everything: NVS, Wi-Fi, the mutual-TLS cloud connection, the OTA
- * backend, and resolve a post-OTA trial boot. Call once from app_main().
- * Pass NULL to use the build-time identity, or a config to override it. */
+ * backend, and resolve a post-OTA trial boot. Call once from app_main() with a
+ * fully-populated config (see device_iot_default_config); cfg must be non-NULL with
+ * at least endpoint, thing_name, and the certs set, else ESP_ERR_INVALID_ARG. */
 esp_err_t device_iot_init(const device_iot_config_t *cfg);
 
 /* Is the cloud connection up? */

@@ -51,7 +51,9 @@ void app_main(void)
     device_iot_set_health_check(app_health_check);
     device_iot_set_connection_cb(on_connection);   /* before init: birth on connect */
 
-    ESP_ERROR_CHECK(device_iot_init(NULL));   /* NULL = build-time identity (secrets.h) */
+    device_iot_config_t cfg;
+    device_iot_default_config(&cfg);          /* build-time identity (secrets.h + embedded certs) */
+    ESP_ERROR_CHECK(device_iot_init(&cfg));   /* override cfg fields here to provision per device */
 
     device_iot_subscribe("cmd", on_command);
 

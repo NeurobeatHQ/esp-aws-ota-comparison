@@ -46,7 +46,10 @@ extern const unsigned char aws_root_ca_pem[];
 #define MAX_JOB_ID_LENGTH          64U
 #define OTA_MAX_SIGNATURE_SIZE     384U
 #define HTTP_CHUNK_SIZE            4096U
-#define MAX_URL_LEN                1024U
+/* A resolved S3 presigned URL carries an X-Amz-Security-Token (STS), so it runs
+ * ~1.2-1.5 KB — 1024 was too small. Stays under JOB_DOC_SIZE (the whole job doc,
+ * incl. this URL, must also fit that buffer). */
+#define MAX_URL_LEN                2048U
 
 #define OTA_TOPIC_PREFIX                   "$aws/things/+/"
 #define OTA_JOB_NOTIFY_TOPIC_FILTER        OTA_TOPIC_PREFIX "jobs/notify-next"
@@ -160,6 +163,11 @@ static esp_err_t http_download_to_pal(AfrOtaJobDocumentFields_t *fields)
         .cert_pem = (const char *)aws_root_ca_pem,   /* S3 chains to Amazon Root CA 1 */
         .timeout_ms = 20000,
         .keep_alive_enable = true,
+        /* The request line carries the full presigned URL (path + ~1 KB of SigV4
+         * query incl. the STS token); the default 512 B tx buffer overflows
+         * ("HTTP_CLIENT: Out of buffer"). Size both to hold it + the S3 headers. */
+        .buffer_size    = 2048,   /* RX: response headers */
+        .buffer_size_tx = 2048,   /* TX: GET request line with the long query */
     };
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (client == NULL) {
@@ -242,6 +250,13 @@ static bool receivedJobDocumentHandler(OtaJobEventData_t *jobDoc)
     }
     if (!convertSignatureToDER(&jobFields)) {
         ESP_LOGE(TAG, "failed to decode image signature");
+        return false;
+    }
+    /* Validate the download URL BEFORE otaPal_CreateFileForRx (which erases the
+     * passive partition) — a job we can't fetch should be a clean no-op. */
+    if (jobFields.imageRefLen == 0 || jobFields.imageRefLen >= MAX_URL_LEN) {
+        ESP_LOGE(TAG, "presigned URL missing/too long (len=%u, max=%u)",
+                 (unsigned)jobFields.imageRefLen, (unsigned)MAX_URL_LEN);
         return false;
     }
     if (otaPal_CreateFileForRx(&jobFields) != OtaPalSuccess) {
@@ -383,7 +398,7 @@ static void prvSubscribeJobTopics(void)
 
 void ota_backend_on_reconnect(void)
 {
-    ESP_LOGW(TAG, "reconnected — re-subscribing to job topics");
+    ESP_LOGI(TAG, "(re)subscribing to job topics");   /* runs on the first connect too */
     prvSubscribeJobTopics();
     OtaEventMsg_t evt = { .eventId = OtaAgentEventRequestJobDocument };
     OtaSendEvent_FreeRTOS(&evt);

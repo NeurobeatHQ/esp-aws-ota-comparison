@@ -517,7 +517,7 @@ static void prvSubscribeJobTopics(void)
  * subscribe + a queue post. */
 void ota_backend_on_reconnect(void)
 {
-    ESP_LOGW(TAG, "reconnected — re-subscribing to job topics");
+    ESP_LOGI(TAG, "(re)subscribing to job topics");   /* runs on the first connect too */
     prvSubscribeJobTopics();
     OtaEventMsg_t evt = { .eventId = OtaAgentEventRequestJobDocument };
     OtaSendEvent_FreeRTOS(&evt);
