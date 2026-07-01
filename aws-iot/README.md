@@ -27,7 +27,8 @@ name.)
 | device policy: app topics `dt/<thing>/*` | ✅ | ✅ | ✅ | ✅ |
 | device policy: `$aws/things/<thing>/jobs/*` | ✅ | ✅ | ✅ | — |
 | device policy: `…/streams/*` (MQTT File Streams) | ✅ | — | — | — |
-| OTA service role + AWS Signer profile | ✅ | ✅ | — | — |
+| OTA service role (CDK) | ✅ | ✅ | — | — |
+| AWS Signer profile (`make-codesign-cert.sh`, not CDK) | ✅ | ✅ | — | — |
 | push action | `create-ota-update --protocols MQTT` | `… --protocols HTTP` | `create-job` (custom doc) | `iot-data publish` (plan) |
 | watch action | poll Job execution | poll Job execution | poll Job execution | subscribe `…/ota/confirm` |
 
@@ -122,3 +123,20 @@ execution** reaching `SUCCEEDED` per Thing, and the **heartbeat** `"fw":"2.0.0"`
 > Thing makes the board run **offline** (it never impersonates another Thing). There is
 > no AWS-issued / embedded-cert shortcut: identity always comes from `esp_secure_cert`.
 
+## Sparse / rarely-connected fleets (OTA)
+
+Devices that connect once a day, once a week, or not for months still update cleanly. An
+offline device's job execution sits in **`QUEUED`** and does **not** expire — the
+`inProgressTimeoutInMinutes` timer only starts once the device reports `IN_PROGRESS`. So
+size that timeout to **one device's update cycle (~10–30 min)**, not the fleet's connect
+cadence; the firmware picks the job up at boot/reconnect (`Jobs_StartNext`). For a rolling
+fleet, prefer a **continuous job on a dynamic thing group** keyed on a **numeric** version
+(store an integer build number — `"0.10" < "0.3"` sorts wrong as a string) targeting
+`swVersion < <latest>`, so a long-dormant device jumps straight to latest in one hop. A
+**snapshot** job stays `IN_PROGRESS` until every straggler reports in (or you cancel it); a
+continuous job never "completes" by design — track per-execution `SUCCEEDED`, not the job.
+
+* [Using Continuous Jobs with AWS IoT Device Management](https://aws.amazon.com/blogs/iot/using-continuous-jobs-with-aws-iot-device-management/)
+* [Dynamic thing groups](https://docs.aws.amazon.com/iot/latest/developerguide/dynamic-thing-groups.html)
+* [Jobs and job execution states](https://docs.aws.amazon.com/iot/latest/developerguide/iot-jobs-lifecycle.html)
+* [Design IoT jobs for rapid large scale device updates with advanced device group target patterns](https://aws.amazon.com/blogs/iot/design-iot-jobs-for-rapid-large-scale-device-updates-with-advanced-device-group-target-patterns/)

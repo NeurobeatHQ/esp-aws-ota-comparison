@@ -28,7 +28,8 @@
 static const char *TAG = "mqtt";
 
 /* The TLS identity (endpoint, certs/key) comes from the resolved transport_config_t;
- * device_iot supplies the build-embedded certs via device_iot_default_config(). */
+ * device_iot supplies the device cert/key from the esp_secure_cert partition (plus the
+ * embedded public root CA) via device_iot_default_config(). */
 
 static MQTTContext_t s_mqtt_ctx;
 static NetworkContext_t s_net_ctx;

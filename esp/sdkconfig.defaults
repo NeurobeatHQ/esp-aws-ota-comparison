@@ -45,8 +45,7 @@ CONFIG_MBEDTLS_ASYMMETRIC_CONTENT_LEN=y
 # esp_secure_cert_mgr exposes a DIFFERENT read API for each (they're mutually
 # exclusive). =n -> plaintext key in the esp_secure_cert partition (cust_flash_tlv;
 # the provision-secure-cert.sh default). Set =y to read a DS-peripheral-wrapped key
-# (provision with --ds). Must match how the partition was provisioned. Harmless in
-# the default embedded-PEM build (esp_secure_cert_mgr is then dropped by --gc-sections).
+# (provision with --ds). Must match how the partition was provisioned.
 # PRECEDENCE: PlatformIO persists each env's active config in sdkconfig.<env>, which
 # OVERRIDES this file once it exists. To switch an env to DS, set =y in that env's
 # sdkconfig.<env> (or delete sdkconfig.<env> to re-seed it from here) — editing only
@@ -78,12 +77,6 @@ CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
 CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
 CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
-
-# --- esp_secure_cert: default to the plaintext key format, NOT the DS peripheral.
-# Pinned here (not just in the generated sdkconfig.<env>) so a regenerated per-env
-# config can't default to DS and mismatch the plaintext provision-secure-cert.sh.
-# Only consulted when built with -DUSE_ESP_SECURE_CERT=1; flip to =y for DS.
-CONFIG_ESP_SECURE_CERT_DS_PERIPHERAL=n
 
 # --- Newlib: nano printf keeps the binary inside a 1.56 MB slot --------------
 CONFIG_NEWLIB_NANO_FORMAT=y

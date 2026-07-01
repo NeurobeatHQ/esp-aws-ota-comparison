@@ -20,4 +20,4 @@ log "[$BACKEND] uploading $BIN -> s3://$BUCKET/$KEY"
 aws s3api put-object --bucket "$BUCKET" --key "$KEY" --body "$BIN" >/dev/null
 log "uploaded."
 echo
-echo "  next:  BACKEND=$BACKEND scripts/push-update.sh $THING_NAME $VERSION"
+echo "  next:  BACKEND=$BACKEND aws-iot/scripts/push-update.sh $THING_NAME $VERSION"

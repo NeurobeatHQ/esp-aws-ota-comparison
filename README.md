@@ -11,7 +11,7 @@ AWS IoT Jobs + MQTT File Streams + coreMQTT over mutual TLS — on pure ESP-IDF 
       └ download → verify signature → activate → reboot → self-test → commit / ROLLBACK
 ```
 
-> The walkthrough uses **variant C** (`pio run -e mqtt` + `aws-iot/` with `BACKEND=mqtt`),
+> The walkthrough uses **variant D** (`pio run -e https` + `aws-iot/` with `BACKEND=https`),
 > one of [four swappable backends](#one-firmware-four-swappable-ota-backends).
 
 ## Status (verified vs. expected)
@@ -89,7 +89,8 @@ See [`esp/README.md`](esp/README.md). The cloud stays split per backend.
 ## Flash benchmark — what drives image size (C vs D vs B vs A)
 
 All four build from the same `esp/` codebase with the identical partition table
-(1.56 MB OTA slot), so the numbers are directly comparable (vGOOD, same version):
+(shared `factory` recovery slot + A/B `ota_0`/`ota_1` at 1.56 MB each — see
+`esp/partitions.csv`), so the numbers are directly comparable (vGOOD, same version):
 
 | backend | doc | flash (`.bin`) | % of 1.56 MiB slot | static RAM |
 |---|---|--:|--:|--:|
@@ -139,13 +140,13 @@ HTTPS transfer plus on-device Signer verify, at ~B's flash and ~17 KB less RAM t
 ```bash
 git submodule update --init --recursive          # pull esp-aws-iot + its libs
 
-# 1) Cloud resources  (one dir, backend chosen by BACKEND — here variant C)
+# 1) Cloud resources  (one dir, backend chosen by BACKEND — here variant D)
 cd aws-iot && npm install && BACKEND=https npx cdk deploy && cd ..
 
 # 2) Code-signing key, mqtt/https only (device identity is separate — see aws-iot/README "Fleet")
 BACKEND=https aws-iot/scripts/make-codesign-cert.sh    # jobs/manual: no-op
 
-# 3) Firmware: set Wi-Fi + endpoint + Thing name, build the initial image, flash
+# 3) Firmware: set Wi-Fi + endpoint (identity comes from esp_secure_cert), build, flash
 cp esp/src/secrets.h.example esp/src/secrets.h        # then edit it
 esp/scripts/build-fixture.sh https good 1.0.0          # backend = https (D)
 cd esp && pio run -e https -t upload -t monitor && cd ..
@@ -176,7 +177,11 @@ backend — the steps are otherwise identical.)
 
 ## Out of scope
 
-Secure Boot / Flash Encryption eFuse burns; recovery/factory image + captive portal;
-A/B identity re-key; custom server-driven control plane. Managed AWS IoT Core path
-only. (`esp_secure_cert` credential provisioning — including the DS peripheral — *is*
+Secure Boot / Flash Encryption eFuse burns; captive portal; A/B identity re-key;
+custom server-driven control plane. Managed AWS IoT Core path only.
+(`esp_secure_cert` credential provisioning — including the DS peripheral — *is*
 wired; see **Identity** above. The irreversible eFuse burn on real units is yours.)
+
+The partition table now carries a `factory` recovery slot alongside `ota_0`/`ota_1`,
+and the minimal recovery image that lives in it is a **sibling project** in
+[`factory/`](factory/) — no longer out of scope. See its README + `RECOVERY.md`.

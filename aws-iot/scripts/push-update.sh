@@ -5,19 +5,31 @@
 #   jobs   -> aws iot create-job        (custom doc carrying a presigned S3 URL)
 #   manual -> aws iot-data publish      (plan -> dt/<thing>/ota/plan; no Jobs)
 #
-#   BACKEND=<b> scripts/push-update.sh <thing-name> <version>
-#   BACKEND=jobs scripts/push-update.sh -g <thing-group> <version>   (mqtt|https|jobs only)
+#   BACKEND=<b> aws-iot/scripts/push-update.sh <thing-name> <version>
+#   BACKEND=jobs aws-iot/scripts/push-update.sh -g <thing-group> <version>   (mqtt|https|jobs only)
 set -euo pipefail
 cd "$(dirname "$0")"
 . ./_lib.sh
 load_stack
 
+# Order-independent flag parsing: -g may appear before OR after the positionals, so
+# `push-update.sh <thing> -g <grp>` (flag last) isn't silently dropped. Collect the two
+# positionals (target, version) into an array as we go.
 TARGET_TYPE="thing"
-if [ "${1:-}" = "-g" ]; then TARGET_TYPE="thing-group"; shift; fi
+POS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -g) TARGET_TYPE="thing-group"; shift ;;
+    -*) echo "unknown option: $1 (usage: push-update.sh [-g] <thing-or-group> <version>)" >&2; exit 2 ;;
+    *)  POS+=("$1"); shift ;;
+  esac
+done
+set -- ${POS[@]+"${POS[@]}"}
 TARGET="${1:?usage: push-update.sh [-g] <thing-or-group> <version>}"
 VERSION="${2:?need the version uploaded by upload-firmware.sh}"
 
-ACCOUNT="$(aws sts get-caller-identity --query Account --output text)"
+# ACCOUNT is already set by aws_preflight() (via load_stack) — reuse it rather than
+# paying for a second sts get-caller-identity round-trip.
 KEY="firmware/${VERSION}/firmware.bin"
 thing_arn()  { echo "arn:aws:iot:${AWS_REGION}:${ACCOUNT}:thing/${1}"; }
 group_arn()  { echo "arn:aws:iot:${AWS_REGION}:${ACCOUNT}:thinggroup/${1}"; }
@@ -36,18 +48,19 @@ case "$BACKEND" in
       [{fileName:"/firmware.bin", fileVersion:"1", fileType:0,
         fileLocation:{s3Location:{bucket:$b, key:$k, version:$v}},
         codeSigning:{startSigningJobParameter:{signingProfileName:$p, destination:{s3Destination:{bucket:$b}}}}}]')"
-    PRESIGN=""
     # awsJobPresignedUrlConfig takes only expiresInSec; the presigning role is the
     # top-level --role-arn (OTA service role) below, which has the S3 read grant.
-    [ "$BACKEND" = "https" ] && PRESIGN="--aws-job-presigned-url-config {\"expiresInSec\":3600}"
+    # Use an array (not an unquoted word-split string) so the JSON stays one argv element.
+    PRESIGN=()
+    [ "$BACKEND" = "https" ] && PRESIGN=(--aws-job-presigned-url-config '{"expiresInSec":3600}')
     log "[$BACKEND] create-ota-update '$OTA_ID' (--protocols $PROTO) -> $(target_arn)"
     aws iot create-ota-update --ota-update-id "$OTA_ID" --description "ESP32 OTA $BACKEND v$VERSION" \
       --targets "$(target_arn)" --target-selection SNAPSHOT --protocols "$PROTO" \
-      --files "$FILES" --role-arn "$OTA_ROLE_ARN" $PRESIGN \
+      --files "$FILES" --role-arn "$OTA_ROLE_ARN" ${PRESIGN[@]+"${PRESIGN[@]}"} \
       --aws-job-abort-config '{"abortCriteriaList":[{"failureType":"FAILED","action":"CANCEL","thresholdPercentage":50,"minNumberOfExecutedThings":1}]}' \
       --aws-job-timeout-config '{"inProgressTimeoutInMinutes":10}' \
       --query '{otaUpdateId:otaUpdateId,jobId:awsIotJobId,status:otaUpdateStatus}' --output table
-    echo; log "watch:  BACKEND=$BACKEND scripts/watch.sh ${TARGET}   (Job id: AFR_OTA-$OTA_ID)"
+    echo; log "watch:  BACKEND=$BACKEND aws-iot/scripts/watch.sh ${TARGET}   (Job id: AFR_OTA-$OTA_ID)"
     ;;
 
   jobs)
@@ -59,7 +72,7 @@ case "$BACKEND" in
     aws iot create-job --job-id "$JOB_ID" --targets "$(target_arn)" --document "$DOC" \
       --target-selection SNAPSHOT --timeout-config inProgressTimeoutInMinutes=10 \
       --query '{jobId:jobId,status:status}' --output table
-    echo; log "watch:  BACKEND=jobs scripts/watch.sh ${TARGET} $JOB_ID"
+    echo; log "watch:  BACKEND=jobs aws-iot/scripts/watch.sh ${TARGET} $JOB_ID"
     ;;
 
   manual)
@@ -72,6 +85,6 @@ case "$BACKEND" in
     log "[manual] publish plan ota_id=$OTA_ID -> dt/$TARGET/ota/plan"
     aws iot-data publish --topic "dt/$TARGET/ota/plan" --qos 1 \
       --cli-binary-format raw-in-base64-out --payload "$PLAN"
-    echo; log "watch:  BACKEND=manual scripts/watch.sh ${TARGET}"
+    echo; log "watch:  BACKEND=manual aws-iot/scripts/watch.sh ${TARGET}"
     ;;
 esac

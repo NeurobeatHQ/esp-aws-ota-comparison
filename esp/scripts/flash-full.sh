@@ -17,23 +17,20 @@ set -euo pipefail
 FACTORY="${1:?usage: flash-full.sh <factory.bin> <env> <port>}"
 ENV="${2:?need the main-app env, e.g. https}"
 PORT="${3:?need the serial port}"
-cd "$(dirname "$0")/.."          # -> esp/
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "$SCRIPT_DIR/_partlib.sh"      # part_off/part_size + PY/ESPTOOL/OTATOOL + switch_to_ota0
+cd "$SCRIPT_DIR/.."             # -> esp/
 
 BUILD=".pio/build/$ENV"
 [ -f "$BUILD/firmware.bin" ] || { echo "error: build the main app first: pio run -e $ENV" >&2; exit 1; }
 [ -f "$FACTORY" ]           || { echo "error: no such factory image: $FACTORY" >&2; exit 1; }
+require_flash_tools
 
-PY="$HOME/.platformio/penv/bin/python"
-ESPTOOL="$HOME/.platformio/packages/tool-esptoolpy/esptool.py"
-OTATOOL="$HOME/.platformio/packages/framework-espidf/components/app_update/otatool.py"
-
-off()  { awk -F, -v n="$1" '{gsub(/[ \t]/,"",$1)} $1==n {gsub(/[ \t]/,"",$4); print $4}' partitions.csv; }
-size() { awk -F, -v n="$1" '{gsub(/[ \t]/,"",$1)} $1==n {gsub(/[ \t]/,"",$5); print $5}' partitions.csv; }
-FACT_OFF="$(off factory)"; OTA0_OFF="$(off ota_0)"; OTADATA_OFF="$(off otadata)"
+FACT_OFF="$(part_off factory)"; OTA0_OFF="$(part_off ota_0)"; OTADATA_OFF="$(part_off otadata)"
 [ -n "$FACT_OFF" ] && [ -n "$OTA0_OFF" ] || { echo "error: table has no factory/ota_0 (unified table expected)" >&2; exit 1; }
 
 # Sanity: the factory image must fit the factory slot.
-FSZ=$(wc -c < "$FACTORY"); FCAP=$(printf '%d' "$(size factory)")
+FSZ=$(wc -c < "$FACTORY"); FCAP=$(printf '%d' "$(part_size factory)")
 [ "$FSZ" -le "$FCAP" ] || { echo "error: factory image $FSZ B > factory slot $FCAP B" >&2; exit 1; }
 
 echo ">> full flash: bootloader@0x0, table@0x8000, factory@$FACT_OFF, main app@ota_0=$OTA0_OFF, otadata@$OTADATA_OFF"
@@ -46,6 +43,6 @@ echo ">> full flash: bootloader@0x0, table@0x8000, factory@$FACT_OFF, main app@o
 
 echo ">> otadata -> ota_0 (boot the MAIN app). Delete the next command to boot FACTORY instead"
 echo "   (factory then bootstraps the app over OTA — the production first-boot flow)."
-"$PY" "$OTATOOL" -p "$PORT" --partition-table-file partitions.csv switch_ota_partition --slot 0
+switch_to_ota0 "$PORT"
 
 echo ">> done — reset the board. Boots the main app from ota_0; factory holds the recovery image."

@@ -34,10 +34,15 @@ export class Esp32OtaStack extends Stack {
     const usesSigner = backend === 'mqtt' || backend === 'https'; // create-ota-update + Signer
 
     // --- shared resources ----------------------------------------------------
+    // The Thing + ThingGroup are declared here, but group membership
+    // (CfnThingGroupMembership) and cert attach (CfnThingPrincipalAttachment)
+    // are INTENTIONALLY not in-stack: the BYO-CA scripts register the device
+    // cert (CN = Thing name), attach it, and join the group out-of-band. This is
+    // by design, not an omission — see aws-iot/README.md "Fleet".
     const thingGroup = new iot.CfnThingGroup(this, 'ThingGroup', {
       thingGroupName: `${thingName}-group`,
     });
-    const thing = new iot.CfnThing(this, 'Thing', { thingName });
+    new iot.CfnThing(this, 'Thing', { thingName });
 
     const bucket = new s3.Bucket(this, 'FirmwareBucket', {
       bucketName: `fw-${thingName}-${account}-${region}`.toLowerCase(),

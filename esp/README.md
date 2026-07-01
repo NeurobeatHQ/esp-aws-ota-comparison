@@ -12,6 +12,9 @@ pio run -e jobs     # B: AWS IoT Jobs lib · esp_https_ota   · no on-device ver
 pio run -e manual   # A: custom MQTT protocol · esp_https_ota · no AWS libraries
 ```
 
+The full orchestration × transfer × authenticity × cloud breakdown of the four
+backends lives in the [top-level README](../README.md#one-firmware-four-swappable-ota-backends).
+
 ## The normalized API
 
 An application includes only `device_iot.h`:
@@ -28,8 +31,8 @@ void app_main(void) {
     device_iot_set_connection_cb(on_conn);   // birth on connect; fires on reconnect too
 
     device_iot_config_t cfg;
-    device_iot_default_config(&cfg);         // build-time identity (secrets.h + embedded certs)
-    device_iot_init(&cfg);                   // override cfg fields first to provision per device
+    device_iot_default_config(&cfg);         // endpoint from secrets.h; cert/key/Thing-name from esp_secure_cert
+    device_iot_init(&cfg);                    // identity is read from the on-flash partition at runtime
 
     device_iot_subscribe("cmd", on_cmd);      // dt/<thing>/cmd
     for (;;) {
@@ -42,10 +45,13 @@ void app_main(void) {
 The facade is the same on every backend:
 
 - **`device_iot_default_config(&cfg)` → `device_iot_init(&cfg)`** — the default loader
-  fills `cfg` with the build-time identity (`secrets.h` + embedded certs); override
-  fields (endpoint, Thing name, cert/key, or a DS-peripheral handle) before init to
-  provision per device — one image, per-device identity. No NULL sentinel; the
-  defaults are explicit in the struct.
+  fills `cfg` with the AWS IoT endpoint from `secrets.h` and points at the on-flash
+  `esp_secure_cert` partition, from which the runtime reads the device cert, private key,
+  and Thing name (the cert's subject CN). Nothing device-specific is embedded, so one
+  image serves the whole fleet — per-board identity comes from what
+  [`scripts/provision-secure-cert.sh`](scripts/provision-secure-cert.sh) wrote to that
+  partition, not from the config or the build. No NULL sentinel; the defaults are
+  explicit in the struct.
 - **`device_iot_publish(subtopic, …, qos)`** — non-blocking; enqueues into a bounded
   outbox and returns. **QoS1 is delivered at-least-once** (retransmitted until the
   broker acks, surviving reconnects). Under sustained backpressure it returns
@@ -92,7 +98,7 @@ that implement the two contracts, add an `elseif` in `src/CMakeLists.txt`, and a
 ## Build · flash · fixtures
 
 ```bash
-cp src/secrets.h.example src/secrets.h    # Wi-Fi + endpoint + Thing name
+cp src/secrets.h.example src/secrets.h    # Wi-Fi + AWS IoT endpoint (identity is in esp_secure_cert)
 pio run -e https                            # (or https | jobs | manual)
 pio run -e https -t upload -t monitor
 scripts/build-fixture.sh https good 2.0.0   # vGOOD/vBAD fixture per backend

@@ -1,11 +1,13 @@
 /*
  * app_config.h — central, non-secret configuration for the ESP32-S3 OTA POC.
  *
- * Secrets (Wi-Fi creds, the AWS IoT endpoint, the Thing name) live in secrets.h,
- * which is .gitignored. Copy secrets.h.example -> secrets.h and fill it in.
+ * Secrets (Wi-Fi creds, the AWS IoT endpoint) live in secrets.h, which is
+ * .gitignored. Copy secrets.h.example -> secrets.h and fill it in.
  *
- * The device cert/key + AWS root CA + code-signing cert are embedded from the
- * src/certs directory (see src/CMakeLists.txt EMBED_TXTFILES).
+ * The AWS root CA + code-signing cert (both public) are embedded from the
+ * src/certs directory at configure time (src/CMakeLists.txt runs
+ * ../embed_certs.cmake via execute_process). The device cert/key are NOT
+ * embedded — they come from the on-flash esp_secure_cert partition.
  */
 #ifndef APP_CONFIG_H
 #define APP_CONFIG_H
@@ -79,7 +81,6 @@
  * ------------------------------------------------------------------------ */
 #define MQTT_KEEP_ALIVE_SECONDS         60
 #define MQTT_NETWORK_BUFFER_SIZE        8192   /* must hold a job doc + headers */
-#define MQTT_PROCESS_LOOP_TIMEOUT_MS    500    /* coreMQTT transport */
 
 /* Boot connectivity policy (device_iot). A NORMAL boot waits briefly for Wi-Fi
  * then runs offline (Wi-Fi + the transport keep reconnecting in the background) —
@@ -112,5 +113,11 @@
  * so the trial image can report SUCCEEDED/FAILED for it. */
 #define OTA_NVS_NAMESPACE               "ota"
 #define OTA_NVS_KEY_JOB_ID              "job_id"
+
+/* Wrap a log-message string literal in bold-green / bold-red ANSI so the milestone
+ * lines (signature OK, download failed, ...) stand out on the console. Literal-only
+ * (concatenated at compile time), so use as ESP_LOGx(TAG, LOG_GREEN("..."), args). */
+#define LOG_GREEN(str)  "\033[1;32m" str "\033[0m"
+#define LOG_RED(str)    "\033[1;31m" str "\033[0m"
 
 #endif /* APP_CONFIG_H */

@@ -16,19 +16,17 @@
 set -euo pipefail
 ENV="${1:?usage: flash-main-app.sh <env> <port>}"
 PORT="${2:?need the serial port, e.g. /dev/cu.usbmodem21201}"
-cd "$(dirname "$0")/.."          # -> esp/
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+. "$SCRIPT_DIR/_partlib.sh"      # part_off/part_size + PY/ESPTOOL/OTATOOL + switch_to_ota0
+cd "$SCRIPT_DIR/.."              # -> esp/
 
 BUILD=".pio/build/$ENV"
 [ -f "$BUILD/firmware.bin" ] || { echo "error: no build for '$ENV' — run: pio run -e $ENV" >&2; exit 1; }
-
-PY="$HOME/.platformio/penv/bin/python"
-ESPTOOL="$HOME/.platformio/packages/tool-esptoolpy/esptool.py"
-OTATOOL="$HOME/.platformio/packages/framework-espidf/components/app_update/otatool.py"
+require_flash_tools
 
 # Offsets come from partitions.csv so this tracks the table, not hard-coded values.
-off() { awk -F, -v n="$1" '{gsub(/[ \t]/,"",$1)} $1==n {gsub(/[ \t]/,"",$4); print $4}' partitions.csv; }
-OTADATA_OFF="$(off otadata)"
-OTA0_OFF="$(off ota_0)"
+OTADATA_OFF="$(part_off otadata)"
+OTA0_OFF="$(part_off ota_0)"
 [ -n "$OTA0_OFF" ] || { echo "error: no ota_0 in partitions.csv (is this the unified table?)" >&2; exit 1; }
 
 echo ">> flash: bootloader@0x0, partitions@0x8000, blank otadata@$OTADATA_OFF, app@ota_0=$OTA0_OFF"
@@ -39,6 +37,6 @@ echo ">> flash: bootloader@0x0, partitions@0x8000, blank otadata@$OTADATA_OFF, a
   "$OTA0_OFF"    "$BUILD/firmware.bin"
 
 echo ">> otatool: point otadata at ota_0 so the bootloader boots the main app"
-"$PY" "$OTATOOL" -p "$PORT" --partition-table-file partitions.csv switch_ota_partition --slot 0
+switch_to_ota0 "$PORT"
 
 echo ">> done — reset the board; it boots the main app from ota_0 (factory stays the recovery image)."

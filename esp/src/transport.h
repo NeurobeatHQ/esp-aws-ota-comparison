@@ -24,9 +24,10 @@ typedef void (*transport_publish_cb_t)(const char *topic, size_t topic_len,
 typedef void (*transport_conn_cb_t)(bool up);
 
 /* Resolved connection config. device_iot fills endpoint/port/thing_name with
- * non-NULL/non-zero values (already defaulted); the cert PEMs may be NULL, in
- * which case the transport uses its build-embedded cert/key. The pointed-to
- * strings must outlive the connection. */
+ * non-NULL/non-zero values (already defaulted). The server root CA is the embedded
+ * public PEM; the device cert (and, unless use_secure_element, the key) come from
+ * the esp_secure_cert partition and are always non-NULL. The pointed-to strings
+ * must outlive the connection. */
 typedef struct {
     const char *endpoint;
     uint16_t    port;

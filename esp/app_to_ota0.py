@@ -2,7 +2,7 @@
 #
 #  `board_build.app_partition_name = ota_0` (platformio.ini) already sizes the build
 #  against ota_0. This sets the *flash* offset to ota_0 too — otherwise
-#  `pio run -t upload` writes the ~955 KB app starting at factory @ 0x10000 and overruns
+#  `pio run -t upload` writes the ~955 KB app starting at the factory offset and overruns
 #  the 640 KB factory slot. (Only runs for the unified factory+ota layout; a plain
 #  two-slot table flashes ota_0 by default and is untouched.)
 #

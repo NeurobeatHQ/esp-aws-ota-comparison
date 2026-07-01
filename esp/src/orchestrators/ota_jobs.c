@@ -13,6 +13,7 @@
 #include "transport.h"
 #include "self_test.h"
 #include "ota_download.h"
+#include "ota_jobs_common.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -33,55 +34,14 @@ static const char *TAG = "jobs";
 #define EVT_JOB_DOC         2
 
 static char     globalJobId[MAX_JOB_ID_LENGTH];
-static char     s_completedJobId[MAX_JOB_ID_LENGTH];
 static char     s_jobDoc[JOB_DOC_SIZE];
 static size_t   s_jobDocLen;
 static QueueHandle_t s_evt_queue;
 static volatile bool s_ready;
 
-/* ------------------------- Jobs control plane ---------------------------- */
-static void requestJobDocumentHandler(void)
-{
-    char topic[TOPIC_BUFFER_SIZE + 1] = { 0 };
-    char msg[START_JOB_MSG_LENGTH] = { 0 };
-    size_t topicLen = 0;
-    if (Jobs_StartNext(topic, TOPIC_BUFFER_SIZE, device_iot_thing_name(), strlen(device_iot_thing_name()),
-                       &topicLen) == JobsSuccess) {
-        size_t msgLen = Jobs_StartNextMsg("token", 5U, msg, START_JOB_MSG_LENGTH);
-        if (msgLen > 0) {
-            transport_publish(topic, (uint16_t)topicLen, msg, msgLen, 0);
-        }
-    }
-}
-
-static bool reportJobStatus(const char *jobId, const char *status)
-{
-    char topic[TOPIC_BUFFER_SIZE + 1] = { 0 };
-    char msg[UPDATE_JOB_MSG_LENGTH + 16] = { 0 };
-    size_t topicLen = 0;
-    if (Jobs_Update(topic, TOPIC_BUFFER_SIZE, device_iot_thing_name(), strlen(device_iot_thing_name()),
-                    jobId, (uint16_t)strnlen(jobId, MAX_JOB_ID_LENGTH), &topicLen) != JobsSuccess) {
-        return false;
-    }
-    int n = snprintf(msg, sizeof(msg), "%s%s\"}", JOBS_API_STATUS, status);
-    if (n <= 0) {
-        return false;
-    }
-    ESP_LOGI(TAG, "reporting job %s -> %s", jobId, status);
-    return transport_publish(topic, (uint16_t)topicLen, msg, (size_t)n, 0) == ESP_OK;
-}
-
-static void prvSubscribeJobTopics(void)
-{
-    char topic[JOBS_API_MAX_LENGTH(MAX_THING_NAME_LEN)] = { 0 };
-    size_t len = 0;
-    /* Deferred-to-boot: skip notify-next (the live push); subscribe only to the
-     * StartNext response, so jobs are picked up via our own StartNext at (re)connect. */
-    if (Jobs_GetTopic(topic, sizeof(topic), device_iot_thing_name(), strlen(device_iot_thing_name()),
-                      JobsStartNextSuccess, &len) == JobsSuccess) {
-        transport_subscribe(topic, (uint16_t)len, 1);
-    }
-}
+/* The Jobs control plane (StartNext request, Jobs_Update status report,
+ * start-next/accepted subscribe, and the post-commit idempotency guard) is shared
+ * across the mqtt/https/jobs backends — see ota_jobs_common.c. */
 
 /* ------------------------- job-doc processing ---------------------------- */
 /* Parse the CUSTOM document {"op":"ota","url":...,"target_version":...},
@@ -93,10 +53,7 @@ static void processJobDoc(void)
     if (jobIdLen == 0 || jobIdLen >= MAX_JOB_ID_LENGTH) {
         return;
     }
-    if (s_completedJobId[0] != '\0' && strlen(s_completedJobId) == jobIdLen &&
-        strncmp(s_completedJobId, jobId, jobIdLen) == 0) {          /* full equality, not prefix */
-        ESP_LOGI(TAG, "ignoring already-completed job (re-affirming SUCCEEDED)");
-        reportJobStatus(s_completedJobId, "SUCCEEDED");
+    if (ota_jobs_is_completed(jobId, jobIdLen)) {
         return;
     }
     memcpy(globalJobId, jobId, jobIdLen);
@@ -121,7 +78,7 @@ static void processJobDoc(void)
     if (cJSON_IsString(op) && strcmp(op->valuestring, "ota") == 0 && cJSON_IsString(url)) {
         ESP_LOGI(TAG, "OTA job: target=%s", cJSON_IsString(tgt) ? tgt->valuestring : "?");
         /* Promote QUEUED -> IN_PROGRESS (notify-next pushes the doc while QUEUED). */
-        reportJobStatus(globalJobId, "IN_PROGRESS");
+        ota_jobs_report_status(globalJobId, "IN_PROGRESS");
         ota_nvs_set_job_id(globalJobId);   /* hand-off across the reboot */
 
         if (ota_download_run(url->valuestring) == ESP_OK) {
@@ -130,7 +87,7 @@ static void processJobDoc(void)
             esp_restart();                 /* does not return */
         }
         ESP_LOGE(TAG, "download failed -> reporting FAILED");
-        reportJobStatus(globalJobId, "FAILED");
+        ota_jobs_report_status(globalJobId, "FAILED");
         ota_nvs_clear_job_id();
         globalJobId[0] = '\0';
     } else {
@@ -169,7 +126,7 @@ static void otaTask(void *arg)
         if (xQueueReceive(s_evt_queue, &evt, portMAX_DELAY) == pdTRUE) {
             if (evt == EVT_REQUEST_JOB) {
                 ESP_LOGI(TAG, "requesting job document (StartNext)");
-                requestJobDocumentHandler();
+                ota_jobs_request_document();
             } else if (evt == EVT_JOB_DOC) {
                 processJobDoc();
             }
@@ -179,39 +136,9 @@ static void otaTask(void *arg)
 
 void ota_backend_on_reconnect(void)
 {
-    prvSubscribeJobTopics();
+    ota_jobs_subscribe_topics();
     int evt = EVT_REQUEST_JOB;
     xQueueSend(s_evt_queue, &evt, 0);
-}
-
-/* Trial-boot self-test gate — identical contract to variant C. */
-static void resolve_trial_boot(void)
-{
-    char jobId[MAX_JOB_ID_LENGTH] = { 0 };
-    bool haveJob = (ota_nvs_get_job_id(jobId, sizeof(jobId)) == ESP_OK);
-    ESP_LOGW(TAG, "trial boot detected — running self-test%s", haveJob ? "" : " (no stashed job id)");
-
-    bool cloud_ok = transport_is_connected();
-    bool core_ok  = self_test_core_function_ok();
-
-    if (cloud_ok && core_ok) {
-        self_test_commit();
-        self_test_disarm_watchdog();
-        if (haveJob) {
-            reportJobStatus(jobId, "SUCCEEDED");
-            strncpy(s_completedJobId, jobId, sizeof(s_completedJobId) - 1);
-            ota_nvs_clear_job_id();
-        }
-        vTaskDelay(pdMS_TO_TICKS(5000));   /* let IoT mark the job SUCCEEDED */
-    } else {
-        ESP_LOGE(TAG, "self-test failed (cloud=%d core=%d) -> rollback", cloud_ok, core_ok);
-        if (haveJob) {
-            reportJobStatus(jobId, "FAILED");
-            ota_nvs_clear_job_id();
-            vTaskDelay(pdMS_TO_TICKS(1500));
-        }
-        self_test_reject_and_rollback();   /* does not return */
-    }
 }
 
 void ota_backend_start(void)
@@ -220,7 +147,7 @@ void ota_backend_start(void)
     configASSERT(s_evt_queue != NULL);
 
     if (self_test_is_trial_boot()) {
-        resolve_trial_boot();
+        self_test_resolve_trial(ota_jobs_trial_report, 5000);
     }
 
     s_ready = true;

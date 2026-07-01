@@ -1,5 +1,6 @@
 /* ota_download.c — esp_https_ota self-download helper (variants A + B). */
 #include "ota_download.h"
+#include "app_config.h"   /* LOG_GREEN */
 
 #include "esp_https_ota.h"
 #include "esp_http_client.h"
@@ -52,6 +53,6 @@ esp_err_t ota_download_run(const char *url)
         ESP_LOGE(TAG, "esp_https_ota_finish failed: %s", esp_err_to_name(err));
         return err;
     }
-    ESP_LOGI(TAG, "\033[1;32mimage downloaded + selected for next boot\033[0m");
+    ESP_LOGI(TAG, LOG_GREEN("image downloaded + selected for next boot"));
     return ESP_OK;
 }

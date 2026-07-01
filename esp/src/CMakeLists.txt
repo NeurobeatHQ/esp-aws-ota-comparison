@@ -22,16 +22,19 @@ set(reqs
 )
 
 if(OTA_BACKEND STREQUAL "mqtt")
-    list(APPEND srcs "transports/transport_coremqtt.c" "orchestrators/ota_filestreams.c")
+    list(APPEND srcs "transports/transport_coremqtt.c" "orchestrators/ota_filestreams.c"
+                     "ota_jobs_common.c")
     list(APPEND reqs coreMQTT coreJSON backoffAlgorithm
                      Jobs-for-AWS-IoT-embedded-sdk aws-iot-core-mqtt-file-streams-embedded-c)
 elseif(OTA_BACKEND STREQUAL "https")
-    list(APPEND srcs "transports/transport_coremqtt.c" "orchestrators/ota_http.c")
+    list(APPEND srcs "transports/transport_coremqtt.c" "orchestrators/ota_http.c"
+                     "ota_jobs_common.c")
     list(APPEND reqs coreMQTT coreJSON backoffAlgorithm
                      Jobs-for-AWS-IoT-embedded-sdk aws-iot-core-mqtt-file-streams-embedded-c
                      esp_http_client)
 elseif(OTA_BACKEND STREQUAL "jobs")
-    list(APPEND srcs "transports/transport_espmqtt.c" "orchestrators/ota_jobs.c" "ota_download.c")
+    list(APPEND srcs "transports/transport_espmqtt.c" "orchestrators/ota_jobs.c" "ota_download.c"
+                     "ota_jobs_common.c")
     list(APPEND reqs coreJSON Jobs-for-AWS-IoT-embedded-sdk json mqtt esp_https_ota esp_http_client)
 elseif(OTA_BACKEND STREQUAL "manual")
     list(APPEND srcs "transports/transport_espmqtt.c" "orchestrators/ota_manual.c" "ota_download.c")

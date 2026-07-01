@@ -1,71 +1,24 @@
-# Process for certificates
+# `master-certs/` — device CA + per-board certificates
 
-## Make CA
+This directory holds the concrete identity artifacts for the fleet:
 
-Once — make your device CA (keep deviceCA.key secret; gitignore it):
+- `deviceCA.key` / `deviceCA.crt` — your bring-your-own device CA (keep `deviceCA.key`
+  secret; it is `.gitignore`d).
+- `esp32-ota-poc-0N.{key,csr,crt}` — per-board private key, CSR, and cert (`CN=<thing>`),
+  signed by the device CA.
 
-```
-openssl genrsa -out deviceCA.key 2048
-openssl req -x509 -new -nodes -key deviceCA.key -sha256 -days 3650 \
-  -subj "/CN=esp32-ota-poc-deviceCA" -out deviceCA.crt
-```
+## How to (re)generate and use them
 
-## For each board make certificates
+The full, authoritative procedure is the **[Fleet — N boards, one OTA push](../aws-iot/README.md#fleet--n-boards-one-ota-push)**
+section of `aws-iot/README.md`. It is the single source of truth for:
 
-Per board (THING = esp32-ota-poc-01, then -02, -03):
+- minting the device CA and each board's key + cert,
+- registering the cert / Thing / policy / thing group in AWS (resolving the policy and
+  group names from the CloudFormation stack outputs, not hardcoded), and
+- provisioning a board with
+  `provision-secure-cert.sh <thing>.crt <thing>.key -p <PORT>` (which writes the cert +
+  key into the on-flash `esp_secure_cert` partition — no copying into `esp/src/certs/`),
+  then building **one** image (`pio run -e https`) that serves every board.
 
-```
-# Device key + cert, CN = the Thing name, signed by your CA
-
-THING=esp32-ota-poc-01
-
-openssl genrsa -out "$THING.key" 2048
-openssl req -new -key "$THING.key" -subj "/CN=$THING" -out "$THING.csr"
-openssl x509 -req -in "$THING.csr" -CA deviceCA.crt -CAkey deviceCA.key \
-  -CAcreateserial -days 3650 -sha256 -out "$THING.crt"
-
-```
-
-## For each board wire in AWS
-
-```
-THING=esp32-ota-poc-01
-
-CERT_ARN=$(aws iot register-certificate-without-ca \
-  --certificate-pem "file://$THING.crt" --status ACTIVE \
-  --query certificateArn --output text)
-
-aws iot create-thing            --thing-name "$THING"
-aws iot attach-policy           --policy-name esp32-ota-poc-01-policy --target "$CERT_ARN"
-aws iot attach-thing-principal  --thing-name "$THING" --principal "$CERT_ARN"
-aws iot add-thing-to-thing-group --thing-group-name esp32-ota-poc-01-group --thing-name "$THING"
-```
-
-Note: esp32-ota-poc-01-policy  and esp32-ota-poc-01-group are created by the AWS CDK - see `aws-iot/lib/ota-stack.ts`
-
-## For each board copy cerst on device
-
-```
-THING=esp32-ota-poc-01
-
-cp "$THING.crt" esp/src/certs/client.crt
-cp "$THING.key" esp/src/certs/client.key
-(cd esp && scripts/provision-secure-cert.sh -p <PORT>)   # + --ds to seal the key in the DS peripheral 
-
-```
-
-## Then for every board, you can flash with the same binary
-
-```
-cd esp && PLATFORMIO_BUILD_FLAGS="-DUSE_ESP_SECURE_CERT=1" pio run -e https
-```
-
-## Updates to all boards via group
-
-```
-BACKEND=https aws-iot/scripts/upload-firmware.sh <firmware.bin> 2.0.0
-BACKEND=https aws-iot/scripts/push-update.sh -g esp32-ota-poc-01-group 2.0.0
-```
-
-
-
+Nothing device-specific is embedded in the firmware: each board's identity (cert, key,
+and Thing name = the cert's CN) is read at runtime from its `esp_secure_cert` partition.

@@ -1,8 +1,11 @@
 /* self_test.c — trial-boot detection, self-test watchdog, commit/rollback, NVS. */
 #include "self_test.h"
 #include "app_config.h"
+#include "transport.h"
 
 #include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "esp_partition.h"
@@ -136,6 +139,33 @@ void self_test_reject_and_rollback(void)
     /* Only reached if there is no valid image to roll back to. */
     ESP_LOGE(TAG, "rollback failed (%s); restarting anyway", esp_err_to_name(err));
     esp_restart();
+}
+
+void self_test_resolve_trial(void (*report)(const char *jobId, bool ok),
+                             uint32_t commit_delay_ms)
+{
+    char jobId[64] = { 0 };
+    bool haveJob = (ota_nvs_get_job_id(jobId, sizeof(jobId)) == ESP_OK);
+    ESP_LOGW(TAG, "trial boot detected — running self-test%s", haveJob ? "" : " (no stashed job id)");
+
+    bool cloud_ok = transport_is_connected();
+    bool core_ok  = self_test_core_function_ok();
+
+    if (cloud_ok && core_ok) {
+        self_test_commit();
+        self_test_disarm_watchdog();
+        if (haveJob) {
+            report(jobId, true);
+        }
+        /* Give the cloud a moment to record the report before StartNext. */
+        vTaskDelay(pdMS_TO_TICKS(commit_delay_ms));
+    } else {
+        ESP_LOGE(TAG, "self-test failed (cloud=%d core=%d) -> rollback", cloud_ok, core_ok);
+        if (haveJob) {
+            report(jobId, false);
+        }
+        self_test_reject_and_rollback();   /* does not return */
+    }
 }
 
 /* ---------------------------- NVS job-id hand-off ------------------------- */

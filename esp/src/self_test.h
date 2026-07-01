@@ -44,6 +44,17 @@ void self_test_commit(void);
  * return. */
 void self_test_reject_and_rollback(void) __attribute__((noreturn));
 
+/* Resolve a trial boot: read the stashed job id (NVS), run the self-test gate
+ * (cloud reachable AND core-function OK), then either commit + disarm the
+ * watchdog + delay (pass) or roll back (fail). The backend-specific status report
+ * is delegated to `report(jobId, ok)`, invoked ONLY when a job id was stashed:
+ * ok=true after commit/disarm (then a commit_delay_ms settle delay follows),
+ * ok=false before rollback. The callback owns its own job-id side effects
+ * (report + clear + any flush delay + idempotency bookkeeping). Shared by the
+ * Jobs backends (commit_delay_ms=5000) and the manual backend (2000). */
+void self_test_resolve_trial(void (*report)(const char *jobId, bool ok),
+                             uint32_t commit_delay_ms);
+
 /* NVS hand-off of the in-flight OTA job id across the activation reboot. */
 esp_err_t ota_nvs_set_job_id(const char *job_id);
 esp_err_t ota_nvs_get_job_id(char *out, size_t out_len);   /* ESP_ERR_NVS_NOT_FOUND if none */

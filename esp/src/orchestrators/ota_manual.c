@@ -135,8 +135,6 @@ static void subscribeControlTopics(void)
     char topic[160];
     int tlen = topic_for(topic, sizeof(topic), "plan");
     transport_subscribe(topic, (uint16_t)tlen, 1);
-    tlen = topic_for(topic, sizeof(topic), "ack");
-    transport_subscribe(topic, (uint16_t)tlen, 1);
 }
 
 void ota_backend_on_reconnect(void)
@@ -146,33 +144,19 @@ void ota_backend_on_reconnect(void)
     xQueueSend(s_evt_queue, &evt, 0);
 }
 
-/* Trial-boot self-test gate — identical contract to variant C, but the report
- * is a custom "confirm" publish instead of a Jobs update. */
-static void resolve_trial_boot(void)
+/* Trial-boot report callback for self_test_resolve_trial(): the manual backend's
+ * "confirm" publish instead of a Jobs update. The "ota_id" is the NVS job id the
+ * shared gate read back. On success: confirm + clear; on failure: confirm, wait to
+ * flush, then clear (preserving this backend's original ordering). */
+static void manual_trial_report(const char *ota_id, bool ok)
 {
-    char ota_id[64] = { 0 };
-    bool haveId = (ota_nvs_get_job_id(ota_id, sizeof(ota_id)) == ESP_OK);
-    ESP_LOGW(TAG, "trial boot detected — running self-test%s", haveId ? "" : " (no stashed ota id)");
-
-    bool cloud_ok = transport_is_connected();
-    bool core_ok  = self_test_core_function_ok();
-
-    if (cloud_ok && core_ok) {
-        self_test_commit();
-        self_test_disarm_watchdog();
-        if (haveId) {
-            publishConfirm(ota_id, "success");
-            ota_nvs_clear_job_id();
-        }
-        vTaskDelay(pdMS_TO_TICKS(2000));
+    if (ok) {
+        publishConfirm(ota_id, "success");
+        ota_nvs_clear_job_id();
     } else {
-        ESP_LOGE(TAG, "self-test failed (cloud=%d core=%d) -> rollback", cloud_ok, core_ok);
-        if (haveId) {
-            publishConfirm(ota_id, "failed");
-            vTaskDelay(pdMS_TO_TICKS(1500));
-            ota_nvs_clear_job_id();
-        }
-        self_test_reject_and_rollback();   /* does not return */
+        publishConfirm(ota_id, "failed");
+        vTaskDelay(pdMS_TO_TICKS(1500));
+        ota_nvs_clear_job_id();
     }
 }
 
@@ -182,7 +166,7 @@ void ota_backend_start(void)
     configASSERT(s_evt_queue != NULL);
 
     if (self_test_is_trial_boot()) {
-        resolve_trial_boot();
+        self_test_resolve_trial(manual_trial_report, 2000);
     }
 
     s_ready = true;

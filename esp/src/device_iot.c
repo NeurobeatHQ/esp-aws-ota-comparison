@@ -222,6 +222,8 @@ static bool wait_cloud_connected(uint32_t timeout_ms)
         }
         vTaskDelay(pdMS_TO_TICKS(200));
     }
+    /* One final one-shot check: catch a connection that came up during the last
+     * ~200 ms sleep, so a good image isn't rolled back at the timeout boundary. */
     return transport_is_connected();
 }
 

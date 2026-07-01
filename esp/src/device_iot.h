@@ -23,9 +23,9 @@ typedef struct {
     const char *endpoint;          /* AWS IoT ATS endpoint host */
     uint16_t    port;              /* broker port, usually 8883 */
     const char *thing_name;        /* clientId + dt/<thing>/ + $aws/things/<thing>/ */
-    const char *root_ca_pem;       /* NUL-terminated PEM: server root CA */
-    const char *client_cert_pem;   /* NUL-terminated PEM: device cert */
-    const char *client_key_pem;    /* NUL-terminated PEM: device key (NULL iff use_secure_element) */
+    const char *root_ca_pem;       /* NUL-terminated PEM: server root CA (embedded, public) */
+    const char *client_cert_pem;   /* NUL-terminated PEM: device cert (from esp_secure_cert) */
+    const char *client_key_pem;    /* NUL-terminated PEM: device key from esp_secure_cert (NULL iff use_secure_element) */
     bool        use_secure_element;/* private key lives in the DS peripheral / esp_secure_cert */
     void       *ds_data;           /* DS context when use_secure_element */
 } device_iot_config_t;

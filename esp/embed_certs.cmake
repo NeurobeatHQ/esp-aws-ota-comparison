@@ -1,6 +1,6 @@
 # Generate a .c file embedding the PEM cert/key files as NUL-terminated byte
 # arrays. Portable (no objcopy / EMBED_TXTFILES) so it works the same under
-# PlatformIO and idf.py. Invoked by src/CMakeLists.txt via add_custom_command.
+# PlatformIO and idf.py. Invoked by src/CMakeLists.txt via execute_process.
 #
 # Inputs (passed with -D): OUT (output .c path), CERT_DIR (the certs directory).
 

@@ -1,4 +1,5 @@
-/* mqtt_es.c — esp-mqtt mutual-TLS wrapper to AWS IoT Core (variants A + B). */
+/* transport_espmqtt.c — esp-mqtt mutual-TLS transport to AWS IoT Core
+ * (used by the jobs + manual backends). */
 #include "transport.h"
 #include "app_config.h"
 
@@ -11,7 +12,8 @@
 static const char *TAG = "mqtt_es";
 
 /* The TLS identity (endpoint, certs/key) comes from the resolved transport_config_t;
- * device_iot supplies the build-embedded certs via device_iot_default_config(). */
+ * device_iot supplies the device cert/key from the esp_secure_cert partition (plus the
+ * embedded public root CA) via device_iot_default_config(). */
 
 static esp_mqtt_client_handle_t s_client;
 static volatile bool s_connected;

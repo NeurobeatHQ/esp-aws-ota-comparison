@@ -5,12 +5,12 @@
 # is embedded in the image, so ONE build serves the whole fleet.
 #
 # Usage:
-#   scripts/provision-secure-cert.sh [CLIENT_CERT CLIENT_KEY] [-p PORT] [--ds]
-#     CLIENT_CERT  path to THIS board's device cert (issued CN=<thing>).
-#     CLIENT_KEY   path to the matching private key.
-#                  Both default to src/certs/client.crt + src/certs/client.key when
-#                  omitted. Pass them per board to provision a fleet without copying
-#                  each board's files into src/certs/ first.
+#   scripts/provision-secure-cert.sh <CLIENT_CERT> <CLIENT_KEY> [-p PORT] [--ds]
+#     CLIENT_CERT  path to THIS board's device cert (issued CN=<thing>).  REQUIRED.
+#     CLIENT_KEY   path to the matching private key.                       REQUIRED.
+#                  Pass them per board to provision a fleet without copying each board's
+#                  files into src/certs/ first. There is no default (src/certs/ holds only
+#                  AmazonRootCA1.pem + the codesign cert, not a device identity).
 #     -p PORT      serial port of the board (default: $ESPPORT, else esptool auto-detect)
 #     --ds         wrap the private key with the DS peripheral. This BURNS an HMAC eFuse
 #                  (IRREVERSIBLE) and requires an RSA key. Default: plaintext key in the
@@ -20,7 +20,7 @@
 #   * Run a build once (e.g. `pio run -e https`) so the component manager fetches
 #     espressif/esp_secure_cert_mgr into managed_components/ (that ships the tool).
 #   * A device cert + key from the BYO-CA flow (see aws-iot/README.md "Fleet"); the
-#     cert's CN is the Thing name. Pass them as args, or drop them at src/certs/client.*.
+#     cert's CN is the Thing name. Pass them as the two positional args (required).
 #   * The tool's Python deps install automatically into a local .provision-venv on first
 #     run (needs python3 + one-time network). Set PYTHON=/path/to/python to use your own.
 set -euo pipefail
@@ -28,11 +28,12 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ESP_DIR="$(dirname "$HERE")"
 CERT_DIR="$ESP_DIR/src/certs"
+. "$HERE/_partlib.sh"            # part_off — single source of truth for the CSV layout
 # Read the esp_secure_cert offset straight from partitions.csv so the two can never
 # drift apart (a wrong offset writes the cert TLV to the wrong flash region, and the
-# board then boots with no identity -> offline). partitions.csv col 4 = Offset.
-PART_OFFSET="$(awk -F, '$1 ~ /^[[:space:]]*esp_secure_cert[[:space:]]*$/ {gsub(/[[:space:]]/,"",$4); print $4}' "$ESP_DIR/partitions.csv")"
-[ -n "$PART_OFFSET" ] || { echo "ERROR: no esp_secure_cert row in $ESP_DIR/partitions.csv" >&2; exit 1; }
+# board then boots with no identity -> offline).
+PART_OFFSET="$(part_off esp_secure_cert)"
+[ -n "$PART_OFFSET" ] || { echo "ERROR: no esp_secure_cert row in $PARTITIONS_CSV" >&2; exit 1; }
 TARGET="esp32s3"
 SECTYPE="cust_flash_tlv"        # current (non-legacy) format; read by esp_secure_cert_read
 PORT="${ESPPORT:-}"
@@ -55,9 +56,16 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# Default to the committed placeholders under src/certs/ when not passed explicitly.
-CERT="${CERT:-$CERT_DIR/client.crt}"
-KEY="${KEY:-$CERT_DIR/client.key}"
+# CLIENT_CERT + CLIENT_KEY are required — there is no per-board default (src/certs/ holds
+# only AmazonRootCA1.pem + the codesign cert, not a device identity). The fleet flow always
+# passes them explicitly; fail with a clear usage error rather than a confusing
+# "cert not found: .../client.crt" on a no-arg run.
+[ -n "$CERT" ] && [ -n "$KEY" ] || {
+  echo "usage: provision-secure-cert.sh <client.crt> <client.key> [-p PORT] [--ds]" >&2
+  echo "       both the device cert and its matching private key are required" >&2
+  echo "       (mint them via the BYO-CA flow: aws-iot/README 'Fleet'). Try --help." >&2
+  exit 2
+}
 
 TOOL="$(find "$ESP_DIR/managed_components" -name configure_esp_secure_cert.py 2>/dev/null | head -1 || true)"
 if [ -z "$TOOL" ]; then

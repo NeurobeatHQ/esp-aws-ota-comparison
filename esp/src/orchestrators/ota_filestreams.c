@@ -18,6 +18,7 @@
 #include "app_config.h"
 #include "transport.h"
 #include "self_test.h"
+#include "ota_jobs_common.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -52,9 +53,6 @@ extern const unsigned char codesign_cert_pem[];
 #define OTA_MAX_SIGNATURE_SIZE     384U
 #define NUM_OF_BLOCKS_REQUESTED    1U
 
-/* OTA MQTT control/status return status (mirrors the reference's local enum). */
-typedef enum { OtaMqttSuccess = 0, OtaMqttPublishFailed, OtaMqttSubscribeFailed } OtaMqttStatus_t;
-
 /* ------------------------------- state ----------------------------------- */
 static MqttFileDownloaderContext_t mqttFileDownloaderContext;
 static uint32_t numOfBlocksRemaining;
@@ -62,32 +60,14 @@ static uint32_t currentBlockOffset;
 static uint8_t  currentFileId;
 static uint32_t totalBytesReceived;
 static char     globalJobId[MAX_JOB_ID_LENGTH];
-static char     s_completedJobId[MAX_JOB_ID_LENGTH];   /* guards re-processing post-commit */
 
 static OtaDataEvent_t       dataBuffers[OTA_MAX_NUM_DATA_BUFFERS];
 static OtaJobEventData_t    jobDocBuffer;
 static AfrOtaJobDocumentFields_t jobFields;
 static uint8_t              OtaImageSignatureDecoded[OTA_MAX_SIGNATURE_SIZE];
 
-static OtaState_t        s_ota_state = OtaAgentStateInit;
 static SemaphoreHandle_t bufferSemaphore;
 static volatile bool     s_ready;
-
-static void prvSubscribeJobTopics(void);
-
-/* ------------------------- MQTT thin wrappers ---------------------------- */
-static OtaMqttStatus_t prvPublish(const char *topic, uint16_t topicLen,
-                                  const char *msg, uint32_t msgLen, uint8_t qos)
-{
-    return (transport_publish(topic, topicLen, msg, msgLen, qos) == ESP_OK)
-               ? OtaMqttSuccess : OtaMqttPublishFailed;
-}
-
-static OtaMqttStatus_t prvSubscribe(const char *filter, uint16_t filterLen, uint8_t qos)
-{
-    return (transport_subscribe(filter, filterLen, qos) == ESP_OK)
-               ? OtaMqttSuccess : OtaMqttSubscribeFailed;
-}
 
 /* ------------------------- OTA data buffers ------------------------------ */
 static OtaDataEvent_t *getOtaDataEventBuffer(void)
@@ -114,40 +94,9 @@ static void freeOtaDataEventBuffer(OtaDataEvent_t *buf)
     }
 }
 
-/* ------------------------- Jobs control plane ---------------------------- */
-static void requestJobDocumentHandler(void)
-{
-    char topicBuffer[TOPIC_BUFFER_SIZE + 1] = { 0 };
-    char messageBuffer[START_JOB_MSG_LENGTH] = { 0 };
-    size_t topicLength = 0;
-
-    if (Jobs_StartNext(topicBuffer, TOPIC_BUFFER_SIZE,
-                       device_iot_thing_name(), strlen(device_iot_thing_name()), &topicLength) == JobsSuccess) {
-        size_t msgLen = Jobs_StartNextMsg("token", 5U, messageBuffer, START_JOB_MSG_LENGTH);
-        if (msgLen > 0) {
-            prvPublish(topicBuffer, topicLength, messageBuffer, msgLen, 0);
-        }
-    }
-}
-
-/* Build the Jobs Update topic for jobId and publish {"status":"<status>"}. */
-static bool reportJobStatus(const char *jobId, const char *status)
-{
-    char topicBuffer[TOPIC_BUFFER_SIZE + 1] = { 0 };
-    char messageBuffer[UPDATE_JOB_MSG_LENGTH + 16] = { 0 };
-    size_t topicLength = 0;
-
-    if (Jobs_Update(topicBuffer, TOPIC_BUFFER_SIZE, device_iot_thing_name(), strlen(device_iot_thing_name()),
-                    jobId, (uint16_t)strnlen(jobId, MAX_JOB_ID_LENGTH), &topicLength) != JobsSuccess) {
-        return false;
-    }
-    int n = snprintf(messageBuffer, sizeof(messageBuffer), "%s%s\"}", JOBS_API_STATUS, status);
-    if (n <= 0) {
-        return false;
-    }
-    ESP_LOGI(TAG, "reporting job %s -> %s", jobId, status);
-    return prvPublish(topicBuffer, topicLength, messageBuffer, (uint32_t)n, 0) == OtaMqttSuccess;
-}
+/* The Jobs control plane (StartNext request, Jobs_Update status report,
+ * start-next/accepted subscribe, and the post-commit idempotency guard) is shared
+ * across the mqtt/https/jobs backends — see ota_jobs_common.c. */
 
 /* ------------------------- job-doc parsing ------------------------------- */
 static bool jobDocumentParser(char *message, size_t messageLength,
@@ -179,8 +128,8 @@ static void initMqttDownloader(AfrOtaJobDocumentFields_t *fields)
                         fields->imageRef, fields->imageRefLen,
                         device_iot_thing_name(), strlen(device_iot_thing_name()), DATA_TYPE_JSON);
 
-    prvSubscribe(mqttFileDownloaderContext.topicStreamData,
-                 mqttFileDownloaderContext.topicStreamDataLength, 0);
+    transport_subscribe(mqttFileDownloaderContext.topicStreamData,
+                        mqttFileDownloaderContext.topicStreamDataLength, 0);
 }
 
 /* AWS delivers the signature as base64; the PAL wants DER. */
@@ -207,7 +156,7 @@ static int16_t handleMqttStreamsBlockArrived(uint8_t *data, size_t dataLength)
     return written;
 }
 
-static OtaMqttStatus_t requestDataBlock(void)
+static esp_err_t requestDataBlock(void)
 {
     char getStreamRequest[GET_STREAM_REQUEST_BUFFER_SIZE];
     size_t len = mqttDownloader_createGetDataBlockRequest(mqttFileDownloaderContext.dataType,
@@ -217,9 +166,9 @@ static OtaMqttStatus_t requestDataBlock(void)
                                                           NUM_OF_BLOCKS_REQUESTED,
                                                           getStreamRequest,
                                                           GET_STREAM_REQUEST_BUFFER_SIZE);
-    return prvPublish(mqttFileDownloaderContext.topicGetStream,
-                      mqttFileDownloaderContext.topicGetStreamLength,
-                      getStreamRequest, len, 0);
+    return transport_publish(mqttFileDownloaderContext.topicGetStream,
+                             mqttFileDownloaderContext.topicGetStreamLength,
+                             getStreamRequest, len, 0);
 }
 
 static bool closeFileHandler(void)
@@ -252,11 +201,7 @@ static OtaPalJobDocProcessingResult_t receivedJobDocumentHandler(OtaJobEventData
     /* Idempotency guard: if this is the job we just committed during the trial
      * boot, re-affirm SUCCEEDED and do NOT re-download it (the PAL would call
      * esp_ota_begin on the already-valid image otherwise). */
-    if (s_completedJobId[0] != '\0' &&
-        strlen(s_completedJobId) == jobIdLength &&            /* full equality, not prefix */
-        strncmp(s_completedJobId, jobId, jobIdLength) == 0) {
-        ESP_LOGI(TAG, "ignoring already-completed job (re-affirming SUCCEEDED)");
-        reportJobStatus(s_completedJobId, "SUCCEEDED");
+    if (ota_jobs_is_completed(jobId, jobIdLength)) {
         return OtaPalJobDocFileCreateFailed;
     }
 
@@ -286,7 +231,7 @@ static OtaPalJobDocProcessingResult_t receivedJobDocumentHandler(OtaJobEventData
         /* Promote the execution QUEUED -> IN_PROGRESS. The notify-next push
          * delivers the doc while the execution is still QUEUED, so without this
          * the cloud job could sit QUEUED and TIME_OUT even on a good image. */
-        reportJobStatus(globalJobId, "IN_PROGRESS");
+        ota_jobs_report_status(globalJobId, "IN_PROGRESS");
         result = OtaPalJobDocFileCreated;
     }
     return result;
@@ -344,8 +289,7 @@ static void processOTAEvents(void)
     switch (recvEvent.eventId) {
         case OtaAgentEventRequestJobDocument:
             ESP_LOGI(TAG, "requesting job document");
-            requestJobDocumentHandler();
-            s_ota_state = OtaAgentStateRequestingJob;
+            ota_jobs_request_document();
             break;
 
         case OtaAgentEventReceivedJobDocument:
@@ -353,21 +297,18 @@ static void processOTAEvents(void)
                 case OtaPalJobDocFileCreated:
                     nextEvent.eventId = OtaAgentEventRequestFileBlock;
                     OtaSendEvent_FreeRTOS(&nextEvent);
-                    s_ota_state = OtaAgentStateCreatingFile;
                     break;
                 default:
                     /* Not an actionable OTA job; keep waiting for the next one. */
-                    s_ota_state = OtaAgentStateWaitingForJob;
                     break;
             }
             break;
 
         case OtaAgentEventRequestFileBlock:
-            s_ota_state = OtaAgentStateRequestingFileBlock;
             if (currentBlockOffset == 0) {
                 ESP_LOGI(TAG, "starting download");
             }
-            if (requestDataBlock() != OtaMqttSuccess) {
+            if (requestDataBlock() != ESP_OK) {
                 ESP_LOGE(TAG, "block request failed; retrying");
                 nextEvent.eventId = OtaAgentEventRequestFileBlock;
                 OtaSendEvent_FreeRTOS(&nextEvent);
@@ -414,22 +355,20 @@ static void processOTAEvents(void)
         case OtaAgentEventCloseFile:
             ESP_LOGI(TAG, "verifying signature + closing file");
             if (closeFileHandler()) {
-                ESP_LOGI(TAG, "\033[1;32msignature OK -> activating new image\033[0m");
+                ESP_LOGI(TAG, LOG_GREEN("signature OK -> activating new image"));
                 nextEvent.eventId = OtaAgentEventActivateImage;
                 OtaSendEvent_FreeRTOS(&nextEvent);
             } else {
-                ESP_LOGE(TAG, "\033[1;31msignature verification FAILED -> rejecting job\033[0m");
-                reportJobStatus(globalJobId, "FAILED");
+                ESP_LOGE(TAG, LOG_RED("signature verification FAILED -> rejecting job"));
+                ota_jobs_report_status(globalJobId, "FAILED");
                 ota_nvs_clear_job_id();
                 globalJobId[0] = '\0';
-                s_ota_state = OtaAgentStateWaitingForJob;
             }
             break;
 
         case OtaAgentEventActivateImage:
             ESP_LOGI(TAG, "activating + rebooting into new image...");
             imageActivationHandler();   /* reboots; should not return */
-            s_ota_state = OtaAgentStateStopped;
             break;
 
         default:
@@ -447,65 +386,13 @@ static void otaTask(void *arg)
     }
 }
 
-/* --------------------------- trial-boot gate ----------------------------- */
-static void resolve_trial_boot(void)
-{
-    char jobId[MAX_JOB_ID_LENGTH] = { 0 };
-    bool haveJob = (ota_nvs_get_job_id(jobId, sizeof(jobId)) == ESP_OK);
-
-    ESP_LOGW(TAG, "trial boot detected — running self-test%s",
-             haveJob ? "" : " (no stashed job id)");
-
-    bool cloud_ok = transport_is_connected();
-    bool core_ok  = self_test_core_function_ok();
-
-    if (cloud_ok && core_ok) {
-        self_test_commit();              /* esp_ota_mark_app_valid_cancel_rollback */
-        self_test_disarm_watchdog();
-        if (haveJob) {
-            reportJobStatus(jobId, "SUCCEEDED");
-            strncpy(s_completedJobId, jobId, sizeof(s_completedJobId) - 1);
-            ota_nvs_clear_job_id();
-        }
-        /* Give IoT Core a moment to mark the job SUCCEEDED before StartNext. */
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    } else {
-        ESP_LOGE(TAG, "self-test failed (cloud=%d core=%d) -> rollback", cloud_ok, core_ok);
-        if (haveJob) {
-            reportJobStatus(jobId, "FAILED");
-            ota_nvs_clear_job_id();
-            vTaskDelay(pdMS_TO_TICKS(1500));   /* best-effort flush before reboot */
-        }
-        self_test_reject_and_rollback();       /* does not return */
-    }
-}
-
-/* Subscribe to both job-control topics:
- *   - jobs/notify-next         : push when the next job changes (job pushed
- *                                while we're connected)
- *   - jobs/start-next/accepted : response to the StartNext we publish (claims a
- *                                job already queued at connect / after reboot)
- * Both are needed: notify-next only fires for the FIRST queued execution, so a
- * device that reconnects with a pending job relies on the StartNext path. */
-static void prvSubscribeJobTopics(void)
-{
-    char topic[JOBS_API_MAX_LENGTH(MAX_THING_NAME_LEN)] = { 0 };
-    size_t len = 0;
-    /* Deferred-to-boot: NOT subscribed to notify-next (the live push). Jobs are
-     * picked up only via our own StartNext at (re)connect. Only start-next/accepted. */
-    if (Jobs_GetTopic(topic, sizeof(topic), device_iot_thing_name(), strlen(device_iot_thing_name()),
-                      JobsStartNextSuccess, &len) == JobsSuccess) {
-        prvSubscribe(topic, (uint16_t)len, 1);
-    }
-}
-
 /* Fired by the MQTT task after a cleanSession reconnect: re-subscribe and ask
  * for the current job again. Runs in the MQTT task; only does thread-safe
  * subscribe + a queue post. */
 void ota_backend_on_reconnect(void)
 {
     ESP_LOGI(TAG, "(re)subscribing to job topics");   /* runs on the first connect too */
-    prvSubscribeJobTopics();
+    ota_jobs_subscribe_topics();
     OtaEventMsg_t evt = { .eventId = OtaAgentEventRequestJobDocument };
     OtaSendEvent_FreeRTOS(&evt);
 }
@@ -520,11 +407,10 @@ void ota_backend_start(void)
     otaPal_SetCodeSigningCertificate((const char *)codesign_cert_pem);
 
     if (self_test_is_trial_boot()) {
-        resolve_trial_boot();
+        self_test_resolve_trial(ota_jobs_trial_report, 5000);
     }
 
     s_ready = true;
-    s_ota_state = OtaAgentStateReady;
 
     if (xTaskCreate(otaTask, "ota", OTA_TASK_STACK_SIZE, NULL, OTA_TASK_PRIORITY, NULL) != pdPASS) {
         ESP_LOGE(TAG, "failed to create OTA task");

@@ -18,6 +18,7 @@
 #include "app_config.h"
 #include "transport.h"
 #include "self_test.h"
+#include "ota_jobs_common.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -51,63 +52,15 @@ extern const unsigned char aws_root_ca_pem[];
  * incl. this URL, must also fit that buffer). */
 #define MAX_URL_LEN                2048U
 
-typedef enum { OtaMqttSuccess = 0, OtaMqttPublishFailed, OtaMqttSubscribeFailed } OtaMqttStatus_t;
-
 static char     globalJobId[MAX_JOB_ID_LENGTH];
-static char     s_completedJobId[MAX_JOB_ID_LENGTH];
 static OtaJobEventData_t    jobDocBuffer;
 static AfrOtaJobDocumentFields_t jobFields;
 static uint8_t  OtaImageSignatureDecoded[OTA_MAX_SIGNATURE_SIZE];
-static OtaState_t s_ota_state = OtaAgentStateInit;
 static volatile bool s_ready;
 
-static void prvSubscribeJobTopics(void);
-
-/* ------------------------- MQTT thin wrappers ---------------------------- */
-static OtaMqttStatus_t prvPublish(const char *topic, uint16_t topicLen,
-                                  const char *msg, uint32_t msgLen, uint8_t qos)
-{
-    return (transport_publish(topic, topicLen, msg, msgLen, qos) == ESP_OK)
-               ? OtaMqttSuccess : OtaMqttPublishFailed;
-}
-
-static OtaMqttStatus_t prvSubscribe(const char *filter, uint16_t filterLen, uint8_t qos)
-{
-    return (transport_subscribe(filter, filterLen, qos) == ESP_OK)
-               ? OtaMqttSuccess : OtaMqttSubscribeFailed;
-}
-
-/* ------------------------- Jobs control plane ---------------------------- */
-static void requestJobDocumentHandler(void)
-{
-    char topicBuffer[TOPIC_BUFFER_SIZE + 1] = { 0 };
-    char messageBuffer[START_JOB_MSG_LENGTH] = { 0 };
-    size_t topicLength = 0;
-    if (Jobs_StartNext(topicBuffer, TOPIC_BUFFER_SIZE,
-                       device_iot_thing_name(), strlen(device_iot_thing_name()), &topicLength) == JobsSuccess) {
-        size_t msgLen = Jobs_StartNextMsg("token", 5U, messageBuffer, START_JOB_MSG_LENGTH);
-        if (msgLen > 0) {
-            prvPublish(topicBuffer, topicLength, messageBuffer, msgLen, 0);
-        }
-    }
-}
-
-static bool reportJobStatus(const char *jobId, const char *status)
-{
-    char topicBuffer[TOPIC_BUFFER_SIZE + 1] = { 0 };
-    char messageBuffer[UPDATE_JOB_MSG_LENGTH + 16] = { 0 };
-    size_t topicLength = 0;
-    if (Jobs_Update(topicBuffer, TOPIC_BUFFER_SIZE, device_iot_thing_name(), strlen(device_iot_thing_name()),
-                    jobId, (uint16_t)strnlen(jobId, MAX_JOB_ID_LENGTH), &topicLength) != JobsSuccess) {
-        return false;
-    }
-    int n = snprintf(messageBuffer, sizeof(messageBuffer), "%s%s\"}", JOBS_API_STATUS, status);
-    if (n <= 0) {
-        return false;
-    }
-    ESP_LOGI(TAG, "reporting job %s -> %s", jobId, status);
-    return prvPublish(topicBuffer, topicLength, messageBuffer, (uint32_t)n, 0) == OtaMqttSuccess;
-}
+/* The Jobs control plane (StartNext request, Jobs_Update status report,
+ * start-next/accepted subscribe, and the post-commit idempotency guard) is shared
+ * across the mqtt/https/jobs backends — see ota_jobs_common.c. */
 
 static bool jobDocumentParser(char *message, size_t messageLength,
                               AfrOtaJobDocumentFields_t *fields)
@@ -227,10 +180,7 @@ static bool receivedJobDocumentHandler(OtaJobEventData_t *jobDoc)
     if (jobIdLength == 0) {
         return false;
     }
-    if (s_completedJobId[0] != '\0' && strlen(s_completedJobId) == jobIdLength &&
-        strncmp(s_completedJobId, jobId, jobIdLength) == 0) {       /* full equality, not prefix */
-        ESP_LOGI(TAG, "ignoring already-completed job (re-affirming SUCCEEDED)");
-        reportJobStatus(s_completedJobId, "SUCCEEDED");
+    if (ota_jobs_is_completed(jobId, jobIdLength)) {
         return false;
     }
     if (jobIdLength >= MAX_JOB_ID_LENGTH) {
@@ -260,7 +210,7 @@ static bool receivedJobDocumentHandler(OtaJobEventData_t *jobDoc)
     }
     ESP_LOGI(TAG, "OTA job accepted (HTTP data path), %lu bytes",
              (unsigned long)jobFields.fileSize);
-    reportJobStatus(globalJobId, "IN_PROGRESS");
+    ota_jobs_report_status(globalJobId, "IN_PROGRESS");
     return true;
 }
 
@@ -292,41 +242,35 @@ static void processOTAEvents(void)
     switch (recvEvent.eventId) {
         case OtaAgentEventRequestJobDocument:
             ESP_LOGI(TAG, "requesting job document");
-            requestJobDocumentHandler();
-            s_ota_state = OtaAgentStateRequestingJob;
+            ota_jobs_request_document();
             break;
 
         case OtaAgentEventReceivedJobDocument:
             if (!receivedJobDocumentHandler(recvEvent.jobEvent)) {
-                s_ota_state = OtaAgentStateWaitingForJob;
                 break;
             }
             /* HTTP data path: download -> verify -> activate, all inline (the
              * transfer is one streaming GET, not async MQTT blocks). */
-            s_ota_state = OtaAgentStateCreatingFile;
             if (http_download_to_pal(&jobFields) != ESP_OK) {
-                ESP_LOGE(TAG, "\033[1;31mdownload failed -> FAILED\033[0m");
-                reportJobStatus(globalJobId, "FAILED");
+                ESP_LOGE(TAG, LOG_RED("download failed -> FAILED"));
+                ota_jobs_report_status(globalJobId, "FAILED");
                 ota_nvs_clear_job_id();
                 globalJobId[0] = '\0';
-                s_ota_state = OtaAgentStateWaitingForJob;
                 break;
             }
             ESP_LOGI(TAG, "verifying signature + closing file");
             if (otaPal_CloseFile(&jobFields) != OtaPalSuccess) {
-                ESP_LOGE(TAG, "\033[1;31msignature verification FAILED -> rejecting job\033[0m");
-                reportJobStatus(globalJobId, "FAILED");
+                ESP_LOGE(TAG, LOG_RED("signature verification FAILED -> rejecting job"));
+                ota_jobs_report_status(globalJobId, "FAILED");
                 ota_nvs_clear_job_id();
                 globalJobId[0] = '\0';
-                s_ota_state = OtaAgentStateWaitingForJob;
                 break;
             }
-            ESP_LOGI(TAG, "\033[1;32msignature OK -> activating + rebooting\033[0m");
+            ESP_LOGI(TAG, LOG_GREEN("signature OK -> activating + rebooting"));
             if (globalJobId[0] != '\0') {
                 ota_nvs_set_job_id(globalJobId);   /* hand-off across the reboot */
             }
             otaPal_ActivateNewImage(&jobFields);   /* sets boot partition + resets */
-            s_ota_state = OtaAgentStateStopped;
             break;
 
         default:
@@ -344,53 +288,10 @@ static void otaTask(void *arg)
     }
 }
 
-/* --------------------------- trial-boot gate ----------------------------- */
-static void resolve_trial_boot(void)
-{
-    char jobId[MAX_JOB_ID_LENGTH] = { 0 };
-    bool haveJob = (ota_nvs_get_job_id(jobId, sizeof(jobId)) == ESP_OK);
-    ESP_LOGW(TAG, "trial boot detected — running self-test%s", haveJob ? "" : " (no stashed job id)");
-
-    bool cloud_ok = transport_is_connected();
-    bool core_ok  = self_test_core_function_ok();
-
-    if (cloud_ok && core_ok) {
-        self_test_commit();
-        self_test_disarm_watchdog();
-        if (haveJob) {
-            reportJobStatus(jobId, "SUCCEEDED");
-            strncpy(s_completedJobId, jobId, sizeof(s_completedJobId) - 1);
-            ota_nvs_clear_job_id();
-        }
-        vTaskDelay(pdMS_TO_TICKS(5000));
-    } else {
-        ESP_LOGE(TAG, "self-test failed (cloud=%d core=%d) -> rollback", cloud_ok, core_ok);
-        if (haveJob) {
-            reportJobStatus(jobId, "FAILED");
-            ota_nvs_clear_job_id();
-            vTaskDelay(pdMS_TO_TICKS(1500));
-        }
-        self_test_reject_and_rollback();   /* does not return */
-    }
-}
-
-static void prvSubscribeJobTopics(void)
-{
-    char topic[JOBS_API_MAX_LENGTH(MAX_THING_NAME_LEN)] = { 0 };
-    size_t len = 0;
-    /* Deferred-to-boot: NOT subscribed to notify-next (the live push). The device
-     * learns about a job only via its own StartNext at (re)connect, so a job queued
-     * while running waits until the next boot/connect. Only start-next/accepted. */
-    if (Jobs_GetTopic(topic, sizeof(topic), device_iot_thing_name(), strlen(device_iot_thing_name()),
-                      JobsStartNextSuccess, &len) == JobsSuccess) {
-        prvSubscribe(topic, (uint16_t)len, 1);
-    }
-}
-
 void ota_backend_on_reconnect(void)
 {
     ESP_LOGI(TAG, "(re)subscribing to job topics");   /* runs on the first connect too */
-    prvSubscribeJobTopics();
+    ota_jobs_subscribe_topics();
     OtaEventMsg_t evt = { .eventId = OtaAgentEventRequestJobDocument };
     OtaSendEvent_FreeRTOS(&evt);
 }
@@ -401,11 +302,10 @@ void ota_backend_start(void)
     otaPal_SetCodeSigningCertificate((const char *)codesign_cert_pem);
 
     if (self_test_is_trial_boot()) {
-        resolve_trial_boot();
+        self_test_resolve_trial(ota_jobs_trial_report, 5000);
     }
 
     s_ready = true;
-    s_ota_state = OtaAgentStateReady;
 
     if (xTaskCreate(otaTask, "ota", OTA_TASK_STACK_SIZE, NULL, OTA_TASK_PRIORITY, NULL) != pdPASS) {
         ESP_LOGE(TAG, "failed to create OTA task");
