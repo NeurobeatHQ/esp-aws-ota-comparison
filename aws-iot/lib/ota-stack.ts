@@ -51,8 +51,8 @@ export class Esp32OtaStack extends Stack {
 
     // --- device policy (scope grows with the backend) ------------------------
     const thingVar = '${iot:Connection.Thing.ThingName}';
-    const pub: string[] = [`arn:aws:iot:${region}:${account}:topic/dt/${thingName}/*`];
-    const sub: string[] = [`arn:aws:iot:${region}:${account}:topicfilter/dt/${thingName}/*`];
+    const pub: string[] = [`arn:aws:iot:${region}:${account}:topic/dt/${thingVar}/*`];
+    const sub: string[] = [`arn:aws:iot:${region}:${account}:topicfilter/dt/${thingVar}/*`];
     if (usesJobs) {
       pub.push(`arn:aws:iot:${region}:${account}:topic/$aws/things/${thingVar}/jobs/*`);
       sub.push(`arn:aws:iot:${region}:${account}:topicfilter/$aws/things/${thingVar}/jobs/*`);
@@ -62,8 +62,8 @@ export class Esp32OtaStack extends Stack {
       sub.push(`arn:aws:iot:${region}:${account}:topicfilter/$aws/things/${thingVar}/streams/*`);
     }
     // Name is backend-INDEPENDENT: swapping the backend updates this policy's
-    // *document* in place, so the device cert (attached out-of-band by
-    // register-device.sh) keeps working — no detach/rename churn.
+    // *document* in place, so the device cert (attached out-of-band by the
+    // BYO-CA provisioning flow) keeps working — no detach/rename churn.
     const policy = new iot.CfnPolicy(this, 'DevicePolicy', {
       policyName: `${thingName}-policy`,
       policyDocument: {

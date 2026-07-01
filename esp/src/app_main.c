@@ -10,6 +10,7 @@
  */
 #include "device_iot.h"
 #include "app_config.h"
+#include "led.h"
 
 #include <stdio.h>
 #include "esp_log.h"
@@ -48,12 +49,24 @@ static void on_connection(bool connected)
 
 void app_main(void)
 {
+    /* Blink the major version on the onboard LED from the very first instant — runs
+     * independently of the network, so the board's version (and any OTA-upgrade or
+     * rollback) is visible by eye even before/without a cloud connection. */
+    led_start_version_blink(APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_BUILD);
+
     device_iot_set_health_check(app_health_check);
     device_iot_set_connection_cb(on_connection);   /* before init: birth on connect */
 
     device_iot_config_t cfg;
-    device_iot_default_config(&cfg);          /* build-time identity (secrets.h + embedded certs) */
-    ESP_ERROR_CHECK(device_iot_init(&cfg));   /* override cfg fields here to provision per device */
+    /* Identity (device cert + key + Thing name via the cert CN) from the esp_secure_cert
+     * partition (provision-secure-cert.sh). ESP_ERR_INVALID_STATE = provisioned but the
+     * cert has no CN (no identity) — NOT fatal: device_iot_init runs offline on a normal
+     * boot / rolls back on a trial boot. Any other error (no cert/key) is a real failure. */
+    esp_err_t idres = device_iot_default_config(&cfg);
+    if (idres != ESP_OK && idres != ESP_ERR_INVALID_STATE) {
+        ESP_ERROR_CHECK(idres);
+    }
+    ESP_ERROR_CHECK(device_iot_init(&cfg));
 
     device_iot_subscribe("cmd", on_command);
 

@@ -1,0 +1,20 @@
+# nbt unified partition table — ONE table for the main app AND the factory/recovery image.
+# `factory` sits at 0x10000, where the 1st-stage bootloader jumps and where PlatformIO flashes
+# the app — so `pio run -t upload` of the factory project lands correctly (no offset gymnastics),
+# and the bootloader's factory->ota_0->ota_1 fallback works.
+#
+# To put factory at 0x10000, the front matches the standard two-OTA layout: nvs is 0x4000 and
+# otadata sits at 0xD000, so phy_init stays at 0xF000 and factory at 0x10000. ota_0/ota_1 follow
+# factory; esp_secure_cert (DS identity), storage, and coredump go after the OTA slots. The DS
+# code finds esp_secure_cert by subtype, not offset, so moving it needs no code change — only
+# DS provisioning/flash uses the new offset. The main app MUST use this same table.
+# Name,            Type, SubType,  Offset,    Size,      Flags
+nvs,               data, nvs,      0x9000,    0x4000,
+otadata,           data, ota,      0xD000,    0x2000,
+phy_init,          data, phy,      0xF000,    0x1000,
+factory,           app,  factory,  0x10000,   0xA0000,
+ota_0,             app,  ota_0,    0xB0000,   0x190000,
+ota_1,             app,  ota_1,    0x240000,  0x190000,
+esp_secure_cert,   0x3F, 0x06,     0x3D0000,  0x2000,    encrypted
+storage,           data, nvs,      0x3D2000,  0x10000,
+coredump,          data, coredump, 0x3E2000,  0x10000,   encrypted

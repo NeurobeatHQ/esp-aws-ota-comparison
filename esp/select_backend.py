@@ -16,3 +16,17 @@ if backend not in VALID:
 
 os.environ["OTA_BACKEND"] = backend
 print(">> OTA backend = %s" % backend)
+
+# macOS Finder drops .DS_Store files into managed_components/, which the ESP-IDF
+# component manager rejects as "unexpected files" / "component modified on disk" and
+# HARD-FAILS the build. This pre-script runs before CMake's component pass, so sweep
+# them here; also ask the manager to ignore any that reappear mid-build.
+_mc = os.path.join(env.subst("$PROJECT_DIR"), "managed_components")  # noqa: F821
+for _root, _dirs, _files in os.walk(_mc):
+    if ".DS_Store" in _files:
+        try:
+            os.remove(os.path.join(_root, ".DS_Store"))
+        except OSError:
+            pass
+os.environ["IGNORE_UNKNOWN_FILES_FOR_MANAGED_COMPONENTS"] = "1"
+

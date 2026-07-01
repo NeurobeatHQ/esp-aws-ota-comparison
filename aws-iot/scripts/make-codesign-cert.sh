@@ -19,6 +19,8 @@ if ! backend_uses_signer; then
   exit 0
 fi
 
+aws_preflight   # mqtt/https reach here -> need AWS for the ACM import + Signer profile
+
 WORK="codesign"
 mkdir -p "$WORK"
 KEY="$WORK/ecdsasigner.key"

@@ -31,9 +31,9 @@ typedef struct {
     const char *endpoint;
     uint16_t    port;
     const char *thing_name;
-    const char *root_ca_pem;       /* NULL -> embedded aws_root_ca_pem */
-    const char *client_cert_pem;   /* NULL -> embedded device_cert_pem */
-    const char *client_key_pem;    /* NULL -> embedded device_key_pem */
+    const char *root_ca_pem;       /* server root CA PEM (embedded, public) */
+    const char *client_cert_pem;   /* device cert PEM (from the esp_secure_cert partition) */
+    const char *client_key_pem;    /* device key PEM (NULL iff use_secure_element / DS) */
     bool        use_secure_element;
     void       *ds_data;
 } transport_config_t;

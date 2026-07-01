@@ -32,8 +32,6 @@ static const char *TAG = "jobs";
 #define EVT_REQUEST_JOB     1
 #define EVT_JOB_DOC         2
 
-#define NOTIFY_NEXT_SUFFIX  "/jobs/notify-next"
-
 static char     globalJobId[MAX_JOB_ID_LENGTH];
 static char     s_completedJobId[MAX_JOB_ID_LENGTH];
 static char     s_jobDoc[JOB_DOC_SIZE];
@@ -77,11 +75,8 @@ static void prvSubscribeJobTopics(void)
 {
     char topic[JOBS_API_MAX_LENGTH(MAX_THING_NAME_LEN)] = { 0 };
     size_t len = 0;
-    if (Jobs_GetTopic(topic, sizeof(topic), device_iot_thing_name(), strlen(device_iot_thing_name()),
-                      JobsNextJobChanged, &len) == JobsSuccess) {
-        transport_subscribe(topic, (uint16_t)len, 1);
-    }
-    len = 0;
+    /* Deferred-to-boot: skip notify-next (the live push); subscribe only to the
+     * StartNext response, so jobs are picked up via our own StartNext at (re)connect. */
     if (Jobs_GetTopic(topic, sizeof(topic), device_iot_thing_name(), strlen(device_iot_thing_name()),
                       JobsStartNextSuccess, &len) == JobsSuccess) {
         transport_subscribe(topic, (uint16_t)len, 1);
@@ -151,11 +146,8 @@ void ota_backend_on_publish(const char *topic, size_t topic_len,
     if (!s_ready) {
         return;
     }
+    /* Deferred-to-boot: only the StartNext response, not the notify-next push. */
     bool isJob = Jobs_IsStartNextAccepted(topic, topic_len, device_iot_thing_name(), strlen(device_iot_thing_name()));
-    if (!isJob) {
-        /* notify-next push (topic is NUL-terminated by mqtt_es). */
-        isJob = (strstr(topic, NOTIFY_NEXT_SUFFIX) != NULL);
-    }
     if (isJob) {
         size_t n = payload_len < sizeof(s_jobDoc) ? payload_len : sizeof(s_jobDoc) - 1;
         memcpy(s_jobDoc, payload, n);
@@ -170,11 +162,9 @@ void ota_backend_on_publish(const char *topic, size_t topic_len,
 static void otaTask(void *arg)
 {
     (void)arg;
-    /* Let the SUBSCRIBEs settle before the first StartNext. */
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    int evt = EVT_REQUEST_JOB;
-    xQueueSend(s_evt_queue, &evt, 0);
-
+    /* No initial StartNext here: the connect path (ota_backend_on_reconnect) drives
+     * subscribe+request, so it fires exactly once. */
+    int evt;
     for (;;) {
         if (xQueueReceive(s_evt_queue, &evt, portMAX_DELAY) == pdTRUE) {
             if (evt == EVT_REQUEST_JOB) {
@@ -233,7 +223,6 @@ void ota_backend_start(void)
         resolve_trial_boot();
     }
 
-    prvSubscribeJobTopics();
     s_ready = true;
 
     if (xTaskCreate(otaTask, "jobs_ota", 6144, NULL, 4, NULL) != pdPASS) {

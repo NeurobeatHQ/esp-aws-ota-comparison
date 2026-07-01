@@ -36,6 +36,22 @@
 #endif
 
 /* --------------------------------------------------------------------------
+ * Onboard LED — a version-pattern indicator (src/led.c).
+ * The LED blinks APP_VERSION_MAJOR short pulses per cycle, so each firmware
+ * version looks different on the board: v1 = 1 blink, v2 = 2 blinks, ... You can
+ * then watch a fleet OTA-upgrade by eye (and a rollback as 1->2->1).
+ * LED_GPIO 48 matches the board this was tested on; the Adafruit Feather
+ * ESP32-S3's own LEDs are GPIO 13 (red) / GPIO 33 (NeoPixel) — change it here if
+ * 48 doesn't light. Set LED_ACTIVE_HIGH 0 if your LED lights on a LOW level.
+ * ------------------------------------------------------------------------ */
+#ifndef LED_GPIO
+    #define LED_GPIO    48
+#endif
+#ifndef LED_ACTIVE_HIGH
+    #define LED_ACTIVE_HIGH    1
+#endif
+
+/* --------------------------------------------------------------------------
  * Connection.  The same firmware always talks to AWS IoT Core for the OTA
  * control plane (Jobs) + data plane (MQTT file streams). The transport keeps
  * endpoint + server-trust as data (network_transport's NetworkContext), so an
@@ -50,14 +66,12 @@
 
 /* The MQTT client id MUST equal the Thing name (the device IoT policy pins
  * iot:Connect to clientId == ${iot:Connection.Thing.ThingName}, and the OTA
- * topic builders derive $aws/things/<thing>/... from it). */
-#ifndef THING_NAME
-    #error "Define THING_NAME in secrets.h (must equal the AWS IoT Thing name)"
-#endif
+ * topic builders derive $aws/things/<thing>/... from it). It is read at runtime
+ * from the device cert's subject CN (esp_secure_cert), never compiled in. */
 
-/* Upper bound for a (possibly runtime-overridden) Thing name. Bounds the resolved
- * copy in device_iot and the OTA topic buffers in the orchestrators. AWS IoT
- * permits up to 128 chars; this covers it. */
+/* Upper bound for the runtime Thing name (the cert CN). Bounds the resolved copy
+ * in device_iot and the OTA topic buffers in the orchestrators. AWS IoT permits
+ * up to 128 chars; this covers it. */
 #define MAX_THING_NAME_LEN 128
 
 /* --------------------------------------------------------------------------

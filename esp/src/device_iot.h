@@ -14,11 +14,11 @@
 #include <stdint.h>
 #include "esp_err.h"
 
-/* Connection identity + endpoint, supplied explicitly at init. Populate every
- * field (use device_iot_default_config() for the build-time identity, then
- * override individual fields to provision per device). The string buffers (PEM,
- * endpoint) must outlive the connection: esp-tls / coreMQTT hold the cert pointers
- * by reference (endpoint + thing_name are copied internally). */
+/* Connection identity + endpoint, supplied to device_iot_init(). Fill it with
+ * device_iot_default_config(), which reads the device cert/key + Thing name from the
+ * esp_secure_cert partition (endpoint/port from secrets.h). The string buffers (PEM,
+ * endpoint) must outlive the connection: esp-tls / coreMQTT hold the cert pointers by
+ * reference (endpoint + thing_name are copied internally). */
 typedef struct {
     const char *endpoint;          /* AWS IoT ATS endpoint host */
     uint16_t    port;              /* broker port, usually 8883 */
@@ -30,12 +30,15 @@ typedef struct {
     void       *ds_data;           /* DS context when use_secure_element */
 } device_iot_config_t;
 
-/* Fill cfg with the BUILD-TIME identity: the secrets.h endpoint/port/Thing name and
- * the certs embedded by embed_certs.cmake. Use it as-is, or as a base and override
- * fields (e.g. cfg.thing_name = serial; cfg.client_cert_pem = cert_from_nvs) before
- * device_iot_init(). This makes the defaults explicit instead of hidden behind a
- * NULL sentinel. */
-void device_iot_default_config(device_iot_config_t *cfg);
+/* Fill cfg for device_iot_init(): endpoint/port from secrets.h, the embedded (public)
+ * root CA, and the device cert + private key + Thing name from the on-flash
+ * `esp_secure_cert` partition (provisioned per board by scripts/provision-secure-cert.sh).
+ * The Thing name (= clientId) is the device cert's subject CN, so ONE image serves the
+ * whole fleet. Auto-detects a DS-peripheral key (sets use_secure_element + ds_data) vs a
+ * plaintext key. Returns ESP_OK; ESP_ERR_INVALID_STATE if the cert has no CN (no usable
+ * identity -> device_iot_init runs offline / rolls back on a trial boot); or a read
+ * error if the partition is empty/unprovisioned. */
+esp_err_t device_iot_default_config(device_iot_config_t *cfg);
 
 /* Bring up everything: NVS, Wi-Fi, the mutual-TLS cloud connection, the OTA
  * backend, and resolve a post-OTA trial boot. Call once from app_main() with a
@@ -88,7 +91,7 @@ void device_iot_set_health_check(device_iot_health_cb_t cb);
 /* The compiled-in backend name: "mqtt" | "https" | "jobs" | "manual". */
 const char *device_iot_backend_name(void);
 
-/* The resolved Thing name (the config override, or the build-time THING_NAME).
+/* The resolved Thing name (the device cert's subject CN, via device_iot_default_config).
  * Valid after device_iot_init(); the OTA backend builds $aws/things/<thing>/...
  * from this so its control plane matches the connection's clientId. */
 const char *device_iot_thing_name(void);

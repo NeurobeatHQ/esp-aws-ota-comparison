@@ -1,0 +1,55 @@
+# --- nbt factory image config ---
+
+# 4 MB flash
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+
+# Use partitions.csv (factory + ota_0 + ota_1). board_build.partitions in
+# platformio.ini only sets the FILENAME; without this choice the build falls back
+# to partitions_singleapp.csv (no OTA slots -> recovery OTA has nowhere to write).
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Recovery OTA is plain HTTP via a raw lwIP socket + esp_ota_* (NOT esp_https_ota /
+# esp_http_client), so esp-tls + mbedTLS stay out of the image. Authenticity is the
+# Secure Boot signature: verified before the slot is made bootable (when SB is on)
+# and re-verified by the bootloader at boot. No trust store, no TLS.
+
+# Captive-portal HTTP server: allow a wildcard catch-all URI handler.
+CONFIG_HTTPD_WS_SUPPORT=n
+
+# --- size reduction (recovery image: WiFi + plain HTTP, no TLS actually used) ---
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y       # -Os
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=n       # drop the ~50 KB root-CA bundle (unused: recovery is HTTP)
+CONFIG_NEWLIB_NANO_FORMAT=y               # small printf/scanf
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y           # drop info/debug log strings
+CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y
+CONFIG_ESP_WIFI_ENABLE_WPA3_SAE=n         # recovery joins/serves open + WPA2 only
+CONFIG_ESP_WIFI_ENABLE_WPA3_OWE_STA=n     # also `select`s ESP_WIFI_MBEDTLS_CRYPTO (the real holdout)
+CONFIG_ESP_WIFI_ENABLE_WPS=n
+CONFIG_ESP_WIFI_MBEDTLS_CRYPTO=n          # supplicant uses its bundled crypto (WPA2 CCMP/AES is in
+                                          # S3 hardware), so with esp-tls already gone mbedTLS can GC
+                                          # to ~zero. VERIFY: run `pio run -t size-components` AND
+                                          # confirm WPA2 still joins.
+CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_SILENT=y  # no per-assert __FILE__ strings
+CONFIG_LWIP_IPV6=n                        # IPv4-only recovery -> ~39 KB smaller lwIP (documented)
+CONFIG_LOG_DYNAMIC_LEVEL_CONTROL=n        # ~1 KB
+# Optional, bigger but with caveats:
+#  - CONFIG_LOG_DEFAULT_LEVEL_NONE=y       drops field logs
+#  - VFS trim: CONFIG_VFS_SUPPORT_IO=n (~9 KB) needs CONFIG_LWIP_USE_ONLY_LWIP_SELECT=y so the
+#    captive-portal HTTP server's select() keeps working
+#  - picolibc: default only on IDF 6.0+; on 5.3.x it's an explicit opt-in and may not beat
+#    newlib-nano (already enabled) on the S3 -- don't count on the "~30 KB"
+
+# --- Bootloader GPIO factory-reset entry (optional; configure to your board) ---
+# These CONFIG_BOOTLOADER_* options are compiled into the BOOTLOADER binary (flash 0x0),
+# NOT into any app image. Holding the pin at boot makes the immutable bootloader erase
+# otadata and boot the factory partition. The bootloader is shared by all app partitions
+# and is never OTA'd, so it's set once when you flash the bootloader and fixed thereafter
+# (keep these settings consistent with the main-app project's bootloader config).
+# Verify the exact symbol names against your IDF version before enabling.
+# CONFIG_BOOTLOADER_FACTORY_RESET=y
+# CONFIG_BOOTLOADER_NUM_PIN_FACTORY_RESET=0
+# CONFIG_BOOTLOADER_OTA_DATA_ERASE=y     # clear otadata so the bootloader picks factory
+# Leave CONFIG_BOOTLOADER_DATA_FACTORY_RESET empty — no app data needs wiping on reset.
+
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y

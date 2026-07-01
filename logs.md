@@ -735,3 +735,878 @@ Final ESP logs proving bad image rejection:
 19:38:39.331 > I (3494) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.
 19:38:39.336 > I (3494) coreMQTT: State record updated. New state=MQTTPublishDone.
 ```
+
+
+## Demo Logs That Show Fleet Working
+
+```
+lookfwd@macbookpro ~ % pio device monitor -p /dev/cu.usbmodem211301
+--- Terminal on /dev/cu.usbmodem211301 | 9600 8-N-1
+--- Available filters and text transformations: debug, default, direct, hexlify, log2file, nocontrol, printable, send_on_enter, time
+--- More details at https://bit.ly/pio-monitor-filters
+--- Quit: Ctrl+C | Menu: Ctrl+T | Help: Ctrl+T followed by Ctrl+H
+Disconnected (read failed: [Errno 6] Device not configured)
+Reconnecting to /dev/cu.usbmodem211301 .	 Connected!
+W (55186) wifi:Password length matches WPA2 standards, authmode threshold changes from OPEN to WPA2
+␛[0;33mW (66336) httpd_txrx: httpd_sock_err: error in recv : 113␛[0m
+␛[0;33mW (66346) httpd_txrx: httpd_sock_err: error in recv : 113␛[0m
+␛[0;33mW (66346) httpd_txrx: httpd_sock_err: error in recv : 113␛[0m
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0xc (RTC_SW_CPU_RST),boot:0x28 (SPI_FAST_FLASH_BOOT)
+Saved PC:0x40375ffd
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0xfb4
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xad8
+load:0x403cb700,len:0x2ce0
+entry 0x403c8888
+␛[0;32mI (238) cpu_start: Multicore app␛[0m
+␛[0;32mI (247) cpu_start: Pro cpu start user code␛[0m
+␛[0;32mI (247) cpu_start: cpu freq: 160000000 Hz␛[0m
+␛[0;32mI (247) app_init: Application information:␛[0m
+␛[0;32mI (250) app_init: Project name:     esp_ota␛[0m
+␛[0;32mI (255) app_init: App version:      1.0.0␛[0m
+␛[0;32mI (260) app_init: Compile time:     Jul  1 2026 01:55:32␛[0m
+␛[0;32mI (266) app_init: ELF file SHA256:  b204a481c...␛[0m
+␛[0;32mI (271) app_init: ESP-IDF:          5.3.1␛[0m
+␛[0;32mI (276) efuse_init: Min chip rev:     v0.0␛[0m
+␛[0;32mI (280) efuse_init: Max chip rev:     v0.99 ␛[0m
+␛[0;32mI (285) efuse_init: Chip rev:         v0.2␛[0m
+␛[0;32mI (290) heap_init: Initializing. RAM available for dynamic allocation:␛[0m
+␛[0;32mI (298) heap_init: At 3FCA7A00 len 00041D10 (263 KiB): RAM␛[0m
+␛[0;32mI (304) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM␛[0m
+␛[0;32mI (310) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM␛[0m
+␛[0;32mI (316) heap_init: At 600FE100 len 00001EE8 (7 KiB): RTCRAM␛[0m
+␛[0;32mI (323) spi_flash: detected chip: generic␛[0m
+␛[0;32mI (327) spi_flash: flash io: dio␛[0m
+␛[0;32mI (331) sleep: Configure to isolate all GPIO pins in sleep state␛[0m
+␛[0;32mI (338) sleep: Enable automatic switching of GPIO sleep configuration␛[0m
+␛[0;32mI (345) esp_core_dump_flash: Init core dump to flash␛[0m
+␛[0;32mI (351) esp_core_dump_flash: Found partition 'coredump' @ 3e2000 65536 bytes␛[0m
+D (358) esp_core_dump_flash: Blank core dump partition!␛[0m
+␛[0;32mI (364) main_task: Started on CPU0␛[0m
+␛[0;32mI (368) main_task: Calling app_main()␛[0m
+␛[0;32mI (372) gpio: GPIO[48]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 ␛[0m
+␛[0;32mI (385) device_iot: esp_secure_cert: Thing name from cert CN = 'esp32-ota-poc-02'␛[0m
+␛[0;32mI (390) device_iot: esp_secure_cert: device key plaintext in partition␛[0m
+␛[0;32mI (419) self_test: ----------------------------------------------------------␛[0m
+␛[0;32mI (420) self_test:  firmware v1.0.0   variant=vGOOD␛[0m
+␛[0;32mI (422) self_test:  running partition: ota_1 @ 0x240000  (ota state 1)␛[0m
+␛[0;32mI (429) self_test:  reset reason: 3   free heap: 299024␛[0m
+␛[0;32mI (435) self_test: ----------------------------------------------------------␛[0m
+␛[0;33mW (443) self_test: self-test watchdog armed (180000 ms)␛[0m
+␛[0;32mI (450) pp: pp rom version: e7ae62f␛[0m
+␛[0;32mI (453) net80211: net80211 rom version: e7ae62f␛[0m
+I (459) wifi:wifi driver task: 3fcb2ec8, prio:23, stack:6144, core=0
+I (477) wifi:wifi firmware version: ccaebfa
+I (478) wifi:wifi certification version: v7.0
+I (478) wifi:config NVS flash: enabled
+I (478) wifi:config nano formating: enabled
+I (482) wifi:Init data frame dynamic rx buffer num: 32
+I (487) wifi:Init static rx mgmt buffer num: 5
+I (491) wifi:Init management short buffer num: 32
+I (495) wifi:Init dynamic tx buffer num: 32
+I (499) wifi:Init static tx FG buffer num: 2
+I (503) wifi:Init static rx buffer size: 1600
+I (508) wifi:Init static rx buffer num: 10
+I (511) wifi:Init dynamic rx buffer num: 32
+␛[0;32mI (516) wifi_init: rx ba win: 6␛[0m
+␛[0;32mI (519) wifi_init: accept mbox: 6␛[0m
+␛[0;32mI (523) wifi_init: tcpip mbox: 32␛[0m
+␛[0;32mI (527) wifi_init: udp mbox: 6␛[0m
+␛[0;32mI (531) wifi_init: tcp mbox: 6␛[0m
+␛[0;32mI (534) wifi_init: tcp tx win: 5760␛[0m
+␛[0;32mI (539) wifi_init: tcp rx win: 5760␛[0m
+␛[0;32mI (543) wifi_init: tcp mss: 1440␛[0m
+␛[0;32mI (547) wifi_init: WiFi IRAM OP enabled␛[0m
+␛[0;32mI (551) wifi_init: WiFi RX IRAM OP enabled␛[0m
+␛[0;32mI (581) phy_init: phy_version 680,a6008b2,Jun  4 2024,16:41:10␛[0m
+␛[0;33mW (619) phy_init: saving new calibration data because of checksum failure, mode(0)␛[0m
+I (663) wifi:mode : sta (a0:f2:62:f4:56:84)
+I (663) wifi:enable tsf
+␛[0;32mI (665) wifi: connecting to SSID 'bananas'...␛[0m
+I (3564) wifi:new:<6,0>, old:<1,0>, ap:<255,255>, sta:<6,0>, prof:1, snd_ch_cfg:0x0
+I (3566) wifi:state: init -> auth (0xb0)
+I (3574) wifi:state: auth -> assoc (0x0)
+I (3583) wifi:state: assoc -> run (0x10)
+I (3597) wifi:connected with bananas, aid = 10, channel 6, BW20, bssid = b0:e4:d5:6a:f3:8d
+I (3598) wifi:security: WPA2-PSK, phy: bgn, rssi: -53
+I (3637) wifi:pm start, type: 1
+
+I (3638) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us
+I (3638) wifi:set rx beacon pti, rx_bcn_pti: 0, bcn_timeout: 25000, mt_pti: 0, mt_time: 10000
+I (3656) wifi:<ba-add>idx:0 (ifx:0, b0:e4:d5:6a:f3:8d), tid:6, ssn:2, winSize:64
+I (3668) wifi:dp: 2, bi: 102400, li: 4, scale listen interval from 307200 us to 409600 us
+I (3668) wifi:AP's beacon interval = 102400 us, DTIM period = 2
+I (3977) wifi:<ba-add>idx:1 (ifx:0, b0:e4:d5:6a:f3:8d), tid:0, ssn:0, winSize:64
+␛[0;32mI (4647) esp_netif_handlers: sta ip: 192.168.86.56, mask: 255.255.255.0, gw: 192.168.86.1␛[0m
+␛[0;32mI (4648) wifi: got IP 192.168.86.56␛[0m
+␛[0;32mI (6037) coreMQTT: MQTT connection established with the broker.␛[0m
+␛[0;32mI (6037) mqtt: MQTT connected to AWS IoT Core as 'esp32-ota-poc-02'␛[0m
+␛[0;33mW (6129) ota: trial boot detected — running self-test␛[0m
+␛[0;32mI (6129) self_test: core-function check: free heap = 204372␛[0m
+␛[0;32mI (6130) self_test: app health check -> PASS␛[0m
+␛[0;32mI (6158) self_test: ␛[1;32mimage COMMITTED (rollback cancelled)␛[0m␛[0m
+␛[0;32mI (6159) self_test: self-test watchdog disarmed␛[0m
+␛[0;32mI (6163) ota: reporting job AFR_OTA-esp32-ota-https-3-0-0-1782885637 -> SUCCEEDED␛[0m
+␛[0;32mI (6200) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (6200) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (6307) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.␛[0m
+␛[0;32mI (6307) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (11168) ota: (re)subscribing to job topics␛[0m
+␛[0;32mI (11205) mqtt: subscribed: $aws/things/esp32-ota-poc-02/jobs/start-next/accepted␛[0m
+␛[0;32mI (11207) ota: requesting job document␛[0m
+␛[0;32mI (11208) device_iot: up — backend 'https', firmware v1.0.0␛[0m
+␛[0;32mI (11318) mqtt: subscribed: dt/esp32-ota-poc-02/cmd␛[0m
+␛[0;32mI (11318) app: running on 'https' backend, v1.0.0 (vGOOD)␛[0m
+␛[0;32mI (11372) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.␛[0m
+␛[0;32mI (11373) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (11424) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (11424) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (41449) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (41450) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (71469) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (71470) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+Disconnected (read failed: [Errno 6] Device not configured)
+Reconnecting to /dev/cu.usbmodem211301 .	 Connected!
+I (3060) wifi:new:<6,0>, old:<1,0>, ap:<255,255>, sta:<6,0>, prof:1, snd_ch_cfg:0x0
+I (3061) wifi:state: init -> auth (0xb0)
+I (3075) wifi:state: auth -> assoc (0x0)
+I (3089) wifi:state: assoc -> run (0x10)
+I (3104) wifi:connected with bananas, aid = 10, channel 6, BW20, bssid = b0:e4:d5:6a:f3:8d
+I (3105) wifi:security: WPA2-PSK, phy: bgn, rssi: -50
+I (3110) wifi:pm start, type: 1
+
+I (3111) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us
+I (3117) wifi:set rx beacon pti, rx_bcn_pti: 0, bcn_timeout: 25000, mt_pti: 0, mt_time: 10000
+I (3126) wifi:dp: 2, bi: 102400, li: 4, scale listen interval from 307200 us to 409600 us
+I (3133) wifi:AP's beacon interval = 102400 us, DTIM period = 2
+I (3145) wifi:<ba-add>idx:0 (ifx:0, b0:e4:d5:6a:f3:8d), tid:6, ssn:2, winSize:64
+␛[0;32mI (4142) esp_netif_handlers: sta ip: 192.168.86.56, mask: 255.255.255.0, gw: 192.168.86.1␛[0m
+␛[0;32mI (4142) wifi: got IP 192.168.86.56␛[0m
+␛[0;32mI (4147) device_iot: up — backend 'https', firmware v1.0.0␛[0m
+␛[0;32mI (4151) app: running on 'https' backend, v1.0.0 (vGOOD)␛[0m
+I (4152) wifi:<ba-add>idx:1 (ifx:0, b0:e4:d5:6a:f3:8d), tid:0, ssn:0, winSize:64
+␛[0;32mI (5356) coreMQTT: MQTT connection established with the broker.␛[0m
+␛[0;32mI (5357) mqtt: MQTT connected to AWS IoT Core as 'esp32-ota-poc-02'␛[0m
+␛[0;32mI (5368) mqtt: subscribed: dt/esp32-ota-poc-02/cmd␛[0m
+␛[0;32mI (5369) ota: (re)subscribing to job topics␛[0m
+␛[0;32mI (5376) mqtt: subscribed: $aws/things/esp32-ota-poc-02/jobs/start-next/accepted␛[0m
+␛[0;32mI (5377) ota: requesting job document␛[0m
+␛[0;32mI (5545) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (5545) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (5598) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.␛[0m
+␛[0;32mI (5599) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (5628) AWS_OTA: otaPal_SetPlatformImageState, 2␛[0m
+␛[0;32mI (5629) AWS_OTA: Set image as valid one!␛[0m
+␛[0;32mI (5629) esp_ota_ops: aws_esp_ota_get_boot_flags: 1␛[0m
+␛[0;32mI (5633) esp_ota_ops: [0] aflags/seq:0x2/0x2, pflags/seq:0xffffffff/0x0␛[0m
+␛[0;33mW (5640) AWS_OTA: Image not in self test mode 2␛[0m
+␛[0;32mI (5646) esp_ota_ops: aws_esp_ota_get_boot_flags: 1␛[0m
+␛[0;32mI (5651) esp_ota_ops: [0] aflags/seq:0x2/0x2, pflags/seq:0xffffffff/0x0␛[0m
+␛[0;32mI (5659) AWS_OTA: Writing to partition subtype 16 at offset 0xb0000␛[0m
+␛[0;32mI (7072) AWS_OTA: esp_ota_begin succeeded␛[0m
+␛[0;32mI (7073) ota: OTA job accepted (HTTP data path), 987232 bytes␛[0m
+␛[0;32mI (7073) ota: reporting job AFR_OTA-esp32-ota-https-2-0-0-1782887508 -> IN_PROGRESS␛[0m
+␛[0;32mI (7241) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.␛[0m
+␛[0;32mI (7242) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (7583) ota: downloading ld bytes over HTTPS␛[0m
+␛[0;32mI (8133) ota: downloaded 102400 / 987232 bytes (10%)␛[0m
+␛[0;32mI (8871) ota: downloaded 200704 / 987232 bytes (20%)␛[0m
+␛[0;32mI (9484) ota: downloaded 299008 / 987232 bytes (30%)␛[0m
+␛[0;32mI (10392) ota: downloaded 397312 / 987232 bytes (40%)␛[0m
+␛[0;32mI (11045) ota: downloaded 495616 / 987232 bytes (50%)␛[0m
+␛[0;32mI (11730) ota: downloaded 593920 / 987232 bytes (60%)␛[0m
+␛[0;32mI (12257) ota: downloaded 692224 / 987232 bytes (70%)␛[0m
+␛[0;32mI (12841) ota: downloaded 790528 / 987232 bytes (80%)␛[0m
+␛[0;32mI (13437) ota: downloaded 888832 / 987232 bytes (90%)␛[0m
+␛[0;32mI (13905) ota: downloaded 987232 / 987232 bytes (100%)␛[0m
+␛[0;32mI (13908) ota: download complete (987232 bytes)␛[0m
+␛[0;32mI (13909) ota: verifying signature + closing file␛[0m
+␛[0;32mI (14213) AWS_OTA: Signature verification succeeded.␛[0m
+␛[0;32mI (14214) ota: ␛[1;32msignature OK -> activating + rebooting␛[0m␛[0m
+␛[0;32mI (14217) esp_image: segment 0: paddr=000b0020 vaddr=3c0b0020 size=32af4h (207604) map␛[0m
+␛[0;32mI (14252) esp_image: segment 1: paddr=000e2b1c vaddr=3fc99700 size=04fcch ( 20428) ␛[0m
+␛[0;32mI (14255) esp_image: segment 2: paddr=000e7af0 vaddr=40374000 size=08528h ( 34088) ␛[0m
+␛[0;32mI (14263) esp_image: segment 3: paddr=000f0020 vaddr=42000020 size=a3ee4h (671460) map␛[0m
+␛[0;32mI (14356) esp_image: segment 4: paddr=00193f0c vaddr=4037c528 size=0d124h ( 53540) ␛[0m
+␛[0;32mI (14365) esp_image: segment 0: paddr=000b0020 vaddr=3c0b0020 size=32af4h (207604) map␛[0m
+␛[0;32mI (14394) esp_image: segment 1: paddr=000e2b1c vaddr=3fc99700 size=04fcch ( 20428) ␛[0m
+␛[0;32mI (14398) esp_image: segment 2: paddr=000e7af0 vaddr=40374000 size=08528h ( 34088) ␛[0m
+␛[0;32mI (14405) esp_image: segment 3: paddr=000f0020 vaddr=42000020 size=a3ee4h (671460) map␛[0m
+␛[0;32mI (14500) esp_image: segment 4: paddr=00193f0c vaddr=4037c528 size=0d124h ( 53540) ␛[0m
+I (15011) wifi:state: run -> init (0x0)
+I (15014) wifi:pm stop, total sleep time: lu us / lu us
+
+I (15014) wifi:<ba-del>idx:1, tid:0
+I (15015) wifi:<ba-del>idx:0, tid:6
+I (15016) wifi:new:<6,0>, old:<6,0>, ap:<255,255>, sta:<6,0>, prof:1, snd_ch_cfg:0x0
+␛[0;31mE (15029) esp-tls-mbedtls: read error :-0x000zX:␛[0m
+␛[0;31mE (15029) network_transport: Error reading: -76␛[0m
+␛[0;31mE (15034) coreMQTT: Call to receiveSingleIteration failed. Status=MQTTRecvFailed␛[0m
+␛[0;31mE (15042) mqtt: process loop error: MQTTRecvFailed -> reconnecting␛[0m
+␛[0;33mW (15050) app: offline␛[0m
+␛[0;31mE (15053) esp-tls: [sock=54] connect() error: Host is unreachable␛[0m
+I (15054) wifi:flush txq
+␛[0;31mE (15059) esp-tls: Failed to open new connection␛[0m
+I (15060) wifi:stop sw txq
+␛[0;31mE (15066) mqtt: TLS connect to a2fm5sbtk65rj6-ats.iot.us-east-1.amazonaws.com:8883 failed␛[0m
+I (15068) wifi:lmac stop hw txq
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0xc (RTC_SW_CPU_RST),boot:0x28 (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4037acca
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0xfb4
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xad8
+load:0x403cb700,len:0x2ce0
+entry 0x403c8888
+␛[0;32mI (235) cpu_start: Multicore app␛[0m
+␛[0;32mI (244) cpu_start: Pro cpu start user code␛[0m
+␛[0;32mI (244) cpu_start: cpu freq: 160000000 Hz␛[0m
+␛[0;32mI (244) app_init: Application information:␛[0m
+␛[0;32mI (247) app_init: Project name:     esp_ota␛[0m
+␛[0;32mI (251) app_init: App version:      1.0.0␛[0m
+␛[0;32mI (256) app_init: Compile time:     Jul  1 2026 01:54:44␛[0m
+␛[0;32mI (262) app_init: ELF file SHA256:  47be4314d...␛[0m
+␛[0;32mI (267) app_init: ESP-IDF:          5.3.1␛[0m
+␛[0;32mI (272) efuse_init: Min chip rev:     v0.0␛[0m
+␛[0;32mI (277) efuse_init: Max chip rev:     v0.99 ␛[0m
+␛[0;32mI (282) efuse_init: Chip rev:         v0.2␛[0m
+␛[0;32mI (287) heap_init: Initializing. RAM available for dynamic allocation:␛[0m
+␛[0;32mI (294) heap_init: At 3FCA7A00 len 00041D10 (263 KiB): RAM␛[0m
+␛[0;32mI (300) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM␛[0m
+␛[0;32mI (306) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM␛[0m
+␛[0;32mI (312) heap_init: At 600FE100 len 00001EE8 (7 KiB): RTCRAM␛[0m
+␛[0;32mI (320) spi_flash: detected chip: generic␛[0m
+␛[0;32mI (323) spi_flash: flash io: dio␛[0m
+␛[0;32mI (328) sleep: Configure to isolate all GPIO pins in sleep state␛[0m
+␛[0;32mI (334) sleep: Enable automatic switching of GPIO sleep configuration␛[0m
+␛[0;32mI (341) esp_core_dump_flash: Init core dump to flash␛[0m
+␛[0;32mI (347) esp_core_dump_flash: Found partition 'coredump' @ 3e2000 65536 bytes␛[0m
+D (354) esp_core_dump_flash: Blank core dump partition!␛[0m
+␛[0;32mI (360) main_task: Started on CPU0␛[0m
+␛[0;32mI (364) main_task: Calling app_main()␛[0m
+␛[0;32mI (368) gpio: GPIO[48]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 ␛[0m
+␛[0;32mI (381) device_iot: esp_secure_cert: Thing name from cert CN = 'esp32-ota-poc-02'␛[0m
+␛[0;32mI (386) device_iot: esp_secure_cert: device key plaintext in partition␛[0m
+␛[0;32mI (416) self_test: ----------------------------------------------------------␛[0m
+␛[0;32mI (417) self_test:  firmware v2.0.0   variant=vGOOD␛[0m
+␛[0;32mI (419) self_test:  running partition: ota_0 @ 0x0b0000  (ota state 1)␛[0m
+␛[0;32mI (426) self_test:  reset reason: 3   free heap: 299024␛[0m
+␛[0;32mI (432) self_test: ----------------------------------------------------------␛[0m
+␛[0;33mW (440) self_test: self-test watchdog armed (180000 ms)␛[0m
+␛[0;32mI (447) pp: pp rom version: e7ae62f␛[0m
+␛[0;32mI (450) net80211: net80211 rom version: e7ae62f␛[0m
+I (456) wifi:wifi driver task: 3fcb2ec8, prio:23, stack:6144, core=0
+I (474) wifi:wifi firmware version: ccaebfa
+I (475) wifi:wifi certification version: v7.0
+I (475) wifi:config NVS flash: enabled
+I (475) wifi:config nano formating: enabled
+I (479) wifi:Init data frame dynamic rx buffer num: 32
+I (484) wifi:Init static rx mgmt buffer num: 5
+I (488) wifi:Init management short buffer num: 32
+I (492) wifi:Init dynamic tx buffer num: 32
+I (496) wifi:Init static tx FG buffer num: 2
+I (500) wifi:Init static rx buffer size: 1600
+I (504) wifi:Init static rx buffer num: 10
+I (508) wifi:Init dynamic rx buffer num: 32
+␛[0;32mI (513) wifi_init: rx ba win: 6␛[0m
+␛[0;32mI (516) wifi_init: accept mbox: 6␛[0m
+␛[0;32mI (520) wifi_init: tcpip mbox: 32␛[0m
+␛[0;32mI (524) wifi_init: udp mbox: 6␛[0m
+␛[0;32mI (528) wifi_init: tcp mbox: 6␛[0m
+␛[0;32mI (531) wifi_init: tcp tx win: 5760␛[0m
+␛[0;32mI (536) wifi_init: tcp rx win: 5760␛[0m
+␛[0;32mI (540) wifi_init: tcp mss: 1440␛[0m
+␛[0;32mI (544) wifi_init: WiFi IRAM OP enabled␛[0m
+␛[0;32mI (548) wifi_init: WiFi RX IRAM OP enabled␛[0m
+␛[0;32mI (555) phy_init: phy_version 680,a6008b2,Jun  4 2024,16:41:10␛[0m
+I (599) wifi:mode : sta (a0:f2:62:f4:56:84)
+I (599) wifi:enable tsf
+␛[0;32mI (601) wifi: connecting to SSID 'bananas'...␛[0m
+I (3013) wifi:new:<6,0>, old:<1,0>, ap:<255,255>, sta:<6,0>, prof:1, snd_ch_cfg:0x0
+I (3014) wifi:state: init -> auth (0xb0)
+I (3022) wifi:state: auth -> assoc (0x0)
+I (3032) wifi:state: assoc -> run (0x10)
+I (3046) wifi:connected with bananas, aid = 8, channel 6, BW20, bssid = b0:e4:d5:6a:f3:8d
+I (3046) wifi:security: WPA2-PSK, phy: bgn, rssi: -53
+I (3050) wifi:pm start, type: 1
+
+I (3051) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us
+I (3059) wifi:set rx beacon pti, rx_bcn_pti: 0, bcn_timeout: 25000, mt_pti: 0, mt_time: 10000
+I (3075) wifi:<ba-add>idx:0 (ifx:0, b0:e4:d5:6a:f3:8d), tid:6, ssn:2, winSize:64
+I (3086) wifi:dp: 2, bi: 102400, li: 4, scale listen interval from 307200 us to 409600 us
+I (3087) wifi:AP's beacon interval = 102400 us, DTIM period = 2
+␛[0;32mI (4070) esp_netif_handlers: sta ip: 192.168.86.56, mask: 255.255.255.0, gw: 192.168.86.1␛[0m
+␛[0;32mI (4070) wifi: got IP 192.168.86.56␛[0m
+I (4076) wifi:<ba-add>idx:1 (ifx:0, b0:e4:d5:6a:f3:8d), tid:0, ssn:0, winSize:64
+␛[0;32mI (5446) coreMQTT: MQTT connection established with the broker.␛[0m
+␛[0;32mI (5447) mqtt: MQTT connected to AWS IoT Core as 'esp32-ota-poc-02'␛[0m
+␛[0;33mW (5475) ota: trial boot detected — running self-test␛[0m
+␛[0;32mI (5475) self_test: core-function check: free heap = 204488␛[0m
+␛[0;32mI (5476) self_test: app health check -> PASS␛[0m
+␛[0;32mI (5498) self_test: ␛[1;32mimage COMMITTED (rollback cancelled)␛[0m␛[0m
+␛[0;32mI (5499) self_test: self-test watchdog disarmed␛[0m
+␛[0;32mI (5500) ota: reporting job AFR_OTA-esp32-ota-https-2-0-0-1782887508 -> SUCCEEDED␛[0m
+␛[0;32mI (5592) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (5592) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (5620) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.␛[0m
+␛[0;32mI (5620) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (10510) ota: (re)subscribing to job topics␛[0m
+␛[0;32mI (10521) mqtt: subscribed: $aws/things/esp32-ota-poc-02/jobs/start-next/accepted␛[0m
+␛[0;32mI (10521) ota: requesting job document␛[0m
+␛[0;32mI (10523) device_iot: up — backend 'https', firmware v2.0.0␛[0m
+␛[0;32mI (10636) mqtt: subscribed: dt/esp32-ota-poc-02/cmd␛[0m
+␛[0;32mI (10636) app: running on 'https' backend, v2.0.0 (vGOOD)␛[0m
+␛[0;32mI (10812) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (10813) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (10827) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.␛[0m
+␛[0;32mI (10828) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (40762) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (40762) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (70814) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (70815) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (100987) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (100988) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (130814) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (130815) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (160728) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (160729) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (190762) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (190763) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (220787) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (220787) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (250809) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (250809) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (280717) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (280718) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+Disconnected (read failed: [Errno 6] Device not configured)
+Reconnecting to /dev/cu.usbmodem211301 .	 Connected!
+I (2998) wifi:new:<6,0>, old:<1,0>, ap:<255,255>, sta:<6,0>, prof:1, snd_ch_cfg:0x0
+I (3000) wifi:state: init -> auth (0xb0)
+I (3012) wifi:state: auth -> assoc (0x0)
+I (3022) wifi:state: assoc -> run (0x10)
+I (3039) wifi:connected with bananas, aid = 8, channel 6, BW20, bssid = b0:e4:d5:6a:f3:8d
+I (3040) wifi:security: WPA2-PSK, phy: bgn, rssi: -55
+I (3043) wifi:pm start, type: 1
+
+I (3044) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us
+I (3052) wifi:set rx beacon pti, rx_bcn_pti: 0, bcn_timeout: 25000, mt_pti: 0, mt_time: 10000
+I (3066) wifi:<ba-add>idx:0 (ifx:0, b0:e4:d5:6a:f3:8d), tid:6, ssn:2, winSize:64
+I (3080) wifi:dp: 2, bi: 102400, li: 4, scale listen interval from 307200 us to 409600 us
+I (3081) wifi:AP's beacon interval = 102400 us, DTIM period = 2
+␛[0;32mI (4063) esp_netif_handlers: sta ip: 192.168.86.56, mask: 255.255.255.0, gw: 192.168.86.1␛[0m
+␛[0;32mI (4063) wifi: got IP 192.168.86.56␛[0m
+␛[0;32mI (4068) device_iot: up — backend 'https', firmware v2.0.0␛[0m
+I (4070) wifi:<ba-add>idx:1 (ifx:0, b0:e4:d5:6a:f3:8d), tid:0, ssn:0, winSize:64
+␛[0;32mI (4079) app: running on 'https' backend, v2.0.0 (vGOOD)␛[0m
+␛[0;32mI (5431) coreMQTT: MQTT connection established with the broker.␛[0m
+␛[0;32mI (5432) mqtt: MQTT connected to AWS IoT Core as 'esp32-ota-poc-02'␛[0m
+␛[0;32mI (5443) mqtt: subscribed: dt/esp32-ota-poc-02/cmd␛[0m
+␛[0;32mI (5444) ota: (re)subscribing to job topics␛[0m
+␛[0;32mI (5451) mqtt: subscribed: $aws/things/esp32-ota-poc-02/jobs/start-next/accepted␛[0m
+␛[0;32mI (5452) ota: requesting job document␛[0m
+␛[0;32mI (5609) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (5609) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (5657) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.␛[0m
+␛[0;32mI (5658) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (5686) AWS_OTA: otaPal_SetPlatformImageState, 2␛[0m
+␛[0;32mI (5687) AWS_OTA: Set image as valid one!␛[0m
+␛[0;32mI (5687) esp_ota_ops: aws_esp_ota_get_boot_flags: 1␛[0m
+␛[0;32mI (5691) esp_ota_ops: [1] aflags/seq:0x2/0x3, pflags/seq:0x2/0x2␛[0m
+␛[0;33mW (5698) AWS_OTA: Image not in self test mode 2␛[0m
+␛[0;32mI (5703) esp_ota_ops: aws_esp_ota_get_boot_flags: 1␛[0m
+␛[0;32mI (5709) esp_ota_ops: [1] aflags/seq:0x2/0x3, pflags/seq:0x2/0x2␛[0m
+␛[0;32mI (5715) AWS_OTA: Writing to partition subtype 17 at offset 0x240000␛[0m
+␛[0;32mI (7154) AWS_OTA: esp_ota_begin succeeded␛[0m
+␛[0;32mI (7154) ota: OTA job accepted (HTTP data path), 987264 bytes␛[0m
+␛[0;32mI (7155) ota: reporting job AFR_OTA-esp32-ota-https-3-0-0-bad-1782887825 -> IN_PROGRESS␛[0m
+␛[0;32mI (7371) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.␛[0m
+␛[0;32mI (7371) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (7738) ota: downloading ld bytes over HTTPS␛[0m
+␛[0;32mI (8373) ota: downloaded 102400 / 987264 bytes (10%)␛[0m
+␛[0;32mI (8911) ota: downloaded 200704 / 987264 bytes (20%)␛[0m
+␛[0;32mI (9485) ota: downloaded 299008 / 987264 bytes (30%)␛[0m
+␛[0;32mI (9980) ota: downloaded 397312 / 987264 bytes (40%)␛[0m
+␛[0;32mI (10529) ota: downloaded 495616 / 987264 bytes (50%)␛[0m
+␛[0;32mI (11196) ota: downloaded 593920 / 987264 bytes (60%)␛[0m
+␛[0;32mI (11709) ota: downloaded 692224 / 987264 bytes (70%)␛[0m
+␛[0;32mI (12260) ota: downloaded 790528 / 987264 bytes (80%)␛[0m
+␛[0;32mI (12838) ota: downloaded 888832 / 987264 bytes (90%)␛[0m
+␛[0;32mI (13414) ota: downloaded 987264 / 987264 bytes (100%)␛[0m
+␛[0;32mI (13417) ota: download complete (987264 bytes)␛[0m
+␛[0;32mI (13417) ota: verifying signature + closing file␛[0m
+␛[0;32mI (13720) AWS_OTA: Signature verification succeeded.␛[0m
+␛[0;32mI (13722) ota: ␛[1;32msignature OK -> activating + rebooting␛[0m␛[0m
+␛[0;32mI (13724) esp_image: segment 0: paddr=00240020 vaddr=3c0b0020 size=32b14h (207636) map␛[0m
+␛[0;32mI (13759) esp_image: segment 1: paddr=00272b3c vaddr=3fc99700 size=04fcch ( 20428) ␛[0m
+␛[0;32mI (13763) esp_image: segment 2: paddr=00277b10 vaddr=40374000 size=08508h ( 34056) ␛[0m
+␛[0;32mI (13770) esp_image: segment 3: paddr=00280020 vaddr=42000020 size=a3ee4h (671460) map␛[0m
+␛[0;32mI (13864) esp_image: segment 4: paddr=00323f0c vaddr=4037c508 size=0d144h ( 53572) ␛[0m
+␛[0;32mI (13872) esp_image: segment 0: paddr=00240020 vaddr=3c0b0020 size=32b14h (207636) map␛[0m
+␛[0;32mI (13901) esp_image: segment 1: paddr=00272b3c vaddr=3fc99700 size=04fcch ( 20428) ␛[0m
+␛[0;32mI (13904) esp_image: segment 2: paddr=00277b10 vaddr=40374000 size=08508h ( 34056) ␛[0m
+␛[0;32mI (13911) esp_image: segment 3: paddr=00280020 vaddr=42000020 size=a3ee4h (671460) map␛[0m
+␛[0;32mI (14007) esp_image: segment 4: paddr=00323f0c vaddr=4037c508 size=0d144h ( 53572) ␛[0m
+I (14532) wifi:state: run -> init (0x0)
+I (14535) wifi:pm stop, total sleep time: lu us / lu us
+
+I (14535) wifi:<ba-del>idx:1, tid:0
+I (14536) wifi:<ba-del>idx:0, tid:6
+I (14537) wifi:new:<6,0>, old:<6,0>, ap:<255,255>, sta:<6,0>, prof:1, snd_ch_cfg:0x0
+␛[0;31mE (14546) network_transport: Error reading the message␛[0m
+␛[0;31mE (14550) coreMQTT: Call to receiveSingleIteration failed. Status=MQTTRecvFailed␛[0m
+␛[0;31mE (14558) mqtt: process loop error: MQTTRecvFailed -> reconnecting␛[0m
+␛[0;33mW (14566) app: offline␛[0m
+␛[0;31mE (14569) esp-tls: [sock=54] connect() error: Host is unreachable␛[0m
+␛[0;31mE (14575) esp-tls: Failed to open new connection␛[0m
+I (14576) wifi:flush txq
+␛[0;31mE (14580) mqtt: TLS connect to a2fm5sbtk65rj6-ats.iot.us-east-1.amazonaws.com:8883 failed␛[0m
+I (14582) wifi:stop sw txq
+I (14593) wifi:lmac stop hw txq
+
+
+
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0xc (RTC_SW_CPU_RST),boot:0x2a (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4037acca
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0xfb4
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xad8
+load:0x403cb700,len:0x2ce0
+entry 0x403c8888
+␛[0;32mI (236) cpu_start: Multicore app␛[0m
+␛[0;32mI (245) cpu_start: Pro cpu start user code␛[0m
+␛[0;32mI (245) cpu_start: cpu freq: 160000000 Hz␛[0m
+␛[0;32mI (245) app_init: Application information:␛[0m
+␛[0;32mI (248) app_init: Project name:     esp_ota␛[0m
+␛[0;32mI (253) app_init: App version:      1.0.0␛[0m
+␛[0;32mI (258) app_init: Compile time:     Jul  1 2026 01:57:38␛[0m
+␛[0;32mI (264) app_init: ELF file SHA256:  d6396ac49...␛[0m
+␛[0;32mI (269) app_init: ESP-IDF:          5.3.1␛[0m
+␛[0;32mI (274) efuse_init: Min chip rev:     v0.0␛[0m
+␛[0;32mI (279) efuse_init: Max chip rev:     v0.99 ␛[0m
+␛[0;32mI (283) efuse_init: Chip rev:         v0.2␛[0m
+␛[0;32mI (288) heap_init: Initializing. RAM available for dynamic allocation:␛[0m
+␛[0;32mI (296) heap_init: At 3FCA7A00 len 00041D10 (263 KiB): RAM␛[0m
+␛[0;32mI (302) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM␛[0m
+␛[0;32mI (308) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM␛[0m
+␛[0;32mI (314) heap_init: At 600FE100 len 00001EE8 (7 KiB): RTCRAM␛[0m
+␛[0;32mI (321) spi_flash: detected chip: generic␛[0m
+␛[0;32mI (325) spi_flash: flash io: dio␛[0m
+␛[0;32mI (329) sleep: Configure to isolate all GPIO pins in sleep state␛[0m
+␛[0;32mI (336) sleep: Enable automatic switching of GPIO sleep configuration␛[0m
+␛[0;32mI (343) esp_core_dump_flash: Init core dump to flash␛[0m
+␛[0;32mI (349) esp_core_dump_flash: Found partition 'coredump' @ 3e2000 65536 bytes␛[0m
+D (356) esp_core_dump_flash: Blank core dump partition!␛[0m
+␛[0;32mI (362) main_task: Started on CPU0␛[0m
+␛[0;32mI (366) main_task: Calling app_main()␛[0m
+␛[0;32mI (370) gpio: GPIO[48]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 ␛[0m
+␛[0;32mI (383) device_iot: esp_secure_cert: Thing name from cert CN = 'esp32-ota-poc-02'␛[0m
+␛[0;32mI (388) device_iot: esp_secure_cert: device key plaintext in partition␛[0m
+␛[0;32mI (418) self_test: ----------------------------------------------------------␛[0m
+␛[0;32mI (419) self_test:  firmware v3.0.0   variant=vBAD␛[0m
+␛[0;32mI (421) self_test:  running partition: ota_1 @ 0x240000  (ota state 1)␛[0m
+␛[0;32mI (428) self_test:  reset reason: 3   free heap: 299024␛[0m
+␛[0;32mI (434) self_test: ----------------------------------------------------------␛[0m
+␛[0;33mW (442) self_test: self-test watchdog armed (180000 ms)␛[0m
+␛[0;32mI (449) pp: pp rom version: e7ae62f␛[0m
+␛[0;32mI (452) net80211: net80211 rom version: e7ae62f␛[0m
+I (458) wifi:wifi driver task: 3fcb2ec8, prio:23, stack:6144, core=0
+I (476) wifi:wifi firmware version: ccaebfa
+I (477) wifi:wifi certification version: v7.0
+I (477) wifi:config NVS flash: enabled
+I (477) wifi:config nano formating: enabled
+I (481) wifi:Init data frame dynamic rx buffer num: 32
+I (486) wifi:Init static rx mgmt buffer num: 5
+I (490) wifi:Init management short buffer num: 32
+I (494) wifi:Init dynamic tx buffer num: 32
+I (498) wifi:Init static tx FG buffer num: 2
+I (502) wifi:Init static rx buffer size: 1600
+I (506) wifi:Init static rx buffer num: 10
+I (510) wifi:Init dynamic rx buffer num: 32
+␛[0;32mI (515) wifi_init: rx ba win: 6␛[0m
+␛[0;32mI (518) wifi_init: accept mbox: 6␛[0m
+␛[0;32mI (522) wifi_init: tcpip mbox: 32␛[0m
+␛[0;32mI (526) wifi_init: udp mbox: 6␛[0m
+␛[0;32mI (530) wifi_init: tcp mbox: 6␛[0m
+␛[0;32mI (533) wifi_init: tcp tx win: 5760␛[0m
+␛[0;32mI (537) wifi_init: tcp rx win: 5760␛[0m
+␛[0;32mI (542) wifi_init: tcp mss: 1440␛[0m
+␛[0;32mI (546) wifi_init: WiFi IRAM OP enabled␛[0m
+␛[0;32mI (550) wifi_init: WiFi RX IRAM OP enabled␛[0m
+␛[0;32mI (557) phy_init: phy_version 680,a6008b2,Jun  4 2024,16:41:10␛[0m
+I (601) wifi:mode : sta (a0:f2:62:f4:56:84)
+I (601) wifi:enable tsf
+␛[0;32mI (603) wifi: connecting to SSID 'bananas'...␛[0m
+I (3015) wifi:new:<6,0>, old:<1,0>, ap:<255,255>, sta:<6,0>, prof:1, snd_ch_cfg:0x0
+I (3016) wifi:state: init -> auth (0xb0)
+I (3023) wifi:state: auth -> assoc (0x0)
+I (3030) wifi:state: assoc -> run (0x10)
+I (3046) wifi:connected with bananas, aid = 8, channel 6, BW20, bssid = b0:e4:d5:6a:f3:8d
+I (3046) wifi:security: WPA2-PSK, phy: bgn, rssi: -50
+I (3050) wifi:pm start, type: 1
+I (3051) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us
+I (3059) wifi:set rx beacon pti, rx_bcn_pti: 0, bcn_timeout: 25000, mt_pti: 0, mt_time: 10000
+I (3073) wifi:<ba-add>idx:0 (ifx:0, b0:e4:d5:6a:f3:8d), tid:6, ssn:2, winSize:64
+I (3114) wifi:dp: 2, bi: 102400, li: 4, scale listen interval from 307200 us to 409600 us
+I (3114) wifi:AP's beacon interval = 102400 us, DTIM period = 2
+I (3424) wifi:<ba-add>idx:1 (ifx:0, b0:e4:d5:6a:f3:8d), tid:0, ssn:0, winSize:64
+␛[0;32mI (4069) esp_netif_handlers: sta ip: 192.168.86.56, mask: 255.255.255.0, gw: 192.168.86.1␛[0m
+␛[0;32mI (4070) wifi: got IP 192.168.86.56␛[0m
+␛[0;32mI (5452) coreMQTT: MQTT connection established with the broker.␛[0m
+␛[0;32mI (5453) mqtt: MQTT connected to AWS IoT Core as 'esp32-ota-poc-02'␛[0m
+␛[0;33mW (5475) ota: trial boot detected — running self-test␛[0m
+␛[0;32mI (5475) self_test: core-function check: free heap = 204460␛[0m
+␛[0;32mI (5476) self_test: app health check -> FAIL␛[0m
+␛[0;31mE (5481) ota: self-test failed (cloud=1 core=0) -> rollback␛[0m
+␛[0;32mI (5488) ota: reporting job AFR_OTA-esp32-ota-https-3-0-0-bad-1782887825 -> FAILED␛[0m
+␛[0;32mI (5607) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (5607) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (5621) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.␛[0m
+␛[0;32mI (5622) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;31mE (6997) self_test: ␛[1;31mimage REJECTED -> rolling back to previous slot␛[0m␛[0m
+␛[0;32mI (7151) esp_ota_ops: Rollback to previously worked partition. Restart.␛[0m
+I (7153) wifi:state: run -> init (0x0)
+I (7155) wifi:pm stop, total sleep time: lu us / lu us
+
+I (7157) wifi:<ba-del>idx:1, tid:0
+I (7160) wifi:<ba-del>idx:0, tid:6
+I (7163) wifi:new:<6,0>, old:<6,0>, ap:<255,255>, sta:<6,0>, prof:1, snd_ch_cfg:0x0
+␛[0;31mE (7173) network_transport: Error reading the message␛[0m
+␛[0;31mE (7176) coreMQTT: Call to receiveSingleIteration failed. Status=MQTTRecvFailed␛[0m
+␛[0;31mE (7184) mqtt: process loop error: MQTTRecvFailed -> reconnecting␛[0m
+␛[0;33mW (7192) app: offline␛[0m
+␛[0;31mE (7195) esp-tls: [sock=54] connect() error: Host is unreachable␛[0m
+␛[0;31mE (7201) esp-tls: Failed to open new connection␛[0m
+␛[0;31mE (7206) mqtt: TLS connect to a2fm5sbtk65rj6-ats.iot.us-east-1.amazonaws.com:8883 failed␛[0m
+I (7215) wifi:flush txq
+I (7216) wifi:stop sw txq
+I (7219) wifi:lmac stop hw txq
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0xc (RTC_SW_CPU_RST),boot:0x2a (SPI_FAST_FLASH_BOOT)
+Saved PC:0x403769bc
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0xfb4
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xad8
+load:0x403cb700,len:0x2ce0
+entry 0x403c8888
+␛[0;32mI (221) cpu_start: Multicore app␛[0m
+␛[0;32mI (230) cpu_start: Pro cpu start user code␛[0m
+␛[0;32mI (230) cpu_start: cpu freq: 160000000 Hz␛[0m
+␛[0;32mI (230) app_init: Application information:␛[0m
+␛[0;32mI (233) app_init: Project name:     esp_ota␛[0m
+␛[0;32mI (238) app_init: App version:      1.0.0␛[0m
+␛[0;32mI (242) app_init: Compile time:     Jul  1 2026 01:54:44␛[0m
+␛[0;32mI (248) app_init: ELF file SHA256:  47be4314d...␛[0m
+␛[0;32mI (254) app_init: ESP-IDF:          5.3.1␛[0m
+␛[0;32mI (258) efuse_init: Min chip rev:     v0.0␛[0m
+␛[0;32mI (263) efuse_init: Max chip rev:     v0.99 ␛[0m
+␛[0;32mI (268) efuse_init: Chip rev:         v0.2␛[0m
+␛[0;32mI (273) heap_init: Initializing. RAM available for dynamic allocation:␛[0m
+␛[0;32mI (280) heap_init: At 3FCA7A00 len 00041D10 (263 KiB): RAM␛[0m
+␛[0;32mI (286) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM␛[0m
+␛[0;32mI (292) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM␛[0m
+␛[0;32mI (298) heap_init: At 600FE100 len 00001EE8 (7 KiB): RTCRAM␛[0m
+␛[0;32mI (306) spi_flash: detected chip: generic␛[0m
+␛[0;32mI (309) spi_flash: flash io: dio␛[0m
+␛[0;32mI (314) sleep: Configure to isolate all GPIO pins in sleep state␛[0m
+␛[0;32mI (320) sleep: Enable automatic switching of GPIO sleep configuration␛[0m
+␛[0;32mI (327) esp_core_dump_flash: Init core dump to flash␛[0m
+␛[0;32mI (333) esp_core_dump_flash: Found partition 'coredump' @ 3e2000 65536 bytes␛[0m
+D (341) esp_core_dump_flash: Blank core dump partition!␛[0m
+␛[0;32mI (346) main_task: Started on CPU0␛[0m
+␛[0;32mI (350) main_task: Calling app_main()␛[0m
+␛[0;32mI (354) gpio: GPIO[48]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 ␛[0m
+␛[0;32mI (367) device_iot: esp_secure_cert: Thing name from cert CN = 'esp32-ota-poc-02'␛[0m
+␛[0;32mI (372) device_iot: esp_secure_cert: device key plaintext in partition␛[0m
+␛[0;32mI (402) self_test: ----------------------------------------------------------␛[0m
+␛[0;32mI (402) self_test:  firmware v2.0.0   variant=vGOOD␛[0m
+␛[0;32mI (404) self_test:  running partition: ota_0 @ 0x0b0000  (ota state 2)␛[0m
+␛[0;32mI (412) self_test:  reset reason: 3   free heap: 299024␛[0m
+␛[0;32mI (417) self_test: ----------------------------------------------------------␛[0m
+␛[0;32mI (427) pp: pp rom version: e7ae62f␛[0m
+␛[0;32mI (430) net80211: net80211 rom version: e7ae62f␛[0m
+I (436) wifi:wifi driver task: 3fcb2e80, prio:23, stack:6144, core=0
+I (454) wifi:wifi firmware version: ccaebfa
+I (454) wifi:wifi certification version: v7.0
+I (455) wifi:config NVS flash: enabled
+I (455) wifi:config nano formating: enabled
+I (459) wifi:Init data frame dynamic rx buffer num: 32
+I (464) wifi:Init static rx mgmt buffer num: 5
+I (468) wifi:Init management short buffer num: 32
+I (472) wifi:Init dynamic tx buffer num: 32
+I (476) wifi:Init static tx FG buffer num: 2
+I (480) wifi:Init static rx buffer size: 1600
+I (484) wifi:Init static rx buffer num: 10
+I (488) wifi:Init dynamic rx buffer num: 32
+␛[0;32mI (493) wifi_init: rx ba win: 6␛[0m
+␛[0;32mI (496) wifi_init: accept mbox: 6␛[0m
+␛[0;32mI (500) wifi_init: tcpip mbox: 32␛[0m
+␛[0;32mI (504) wifi_init: udp mbox: 6␛[0m
+␛[0;32mI (507) wifi_init: tcp mbox: 6␛[0m
+␛[0;32mI (511) wifi_init: tcp tx win: 5760␛[0m
+␛[0;32mI (515) wifi_init: tcp rx win: 5760␛[0m
+␛[0;32mI (519) wifi_init: tcp mss: 1440␛[0m
+␛[0;32mI (523) wifi_init: WiFi IRAM OP enabled␛[0m
+␛[0;32mI (528) wifi_init: WiFi RX IRAM OP enabled␛[0m
+␛[0;32mI (534) phy_init: phy_version 680,a6008b2,Jun  4 2024,16:41:10␛[0m
+I (579) wifi:mode : sta (a0:f2:62:f4:56:84)
+I (579) wifi:enable tsf
+␛[0;32mI (581) wifi: connecting to SSID 'bananas'...␛[0m
+I (2993) wifi:new:<6,0>, old:<1,0>, ap:<255,255>, sta:<6,0>, prof:1, snd_ch_cfg:0x0
+I (2994) wifi:state: init -> auth (0xb0)
+I (3004) wifi:state: auth -> assoc (0x0)
+I (3012) wifi:state: assoc -> run (0x10)
+I (3027) wifi:connected with bananas, aid = 8, channel 6, BW20, bssid = b0:e4:d5:6a:f3:8d
+I (3028) wifi:security: WPA2-PSK, phy: bgn, rssi: -49
+I (3032) wifi:pm start, type: 1
+
+I (3032) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us
+I (3040) wifi:set rx beacon pti, rx_bcn_pti: 0, bcn_timeout: 25000, mt_pti: 0, mt_time: 10000
+I (3049) wifi:dp: 2, bi: 102400, li: 4, scale listen interval from 307200 us to 409600 us
+I (3056) wifi:AP's beacon interval = 102400 us, DTIM period = 2
+I (3068) wifi:<ba-add>idx:0 (ifx:0, b0:e4:d5:6a:f3:8d), tid:6, ssn:2, winSize:64
+␛[0;32mI (4064) esp_netif_handlers: sta ip: 192.168.86.56, mask: 255.255.255.0, gw: 192.168.86.1␛[0m
+␛[0;32mI (4065) wifi: got IP 192.168.86.56␛[0m
+␛[0;32mI (4069) device_iot: up — backend 'https', firmware v2.0.0␛[0m
+␛[0;32mI (4073) app: running on 'https' backend, v2.0.0 (vGOOD)␛[0m
+I (4074) wifi:<ba-add>idx:1 (ifx:0, b0:e4:d5:6a:f3:8d), tid:0, ssn:0, winSize:64
+␛[0;32mI (5300) coreMQTT: MQTT connection established with the broker.␛[0m
+␛[0;32mI (5301) mqtt: MQTT connected to AWS IoT Core as 'esp32-ota-poc-02'␛[0m
+␛[0;32mI (5312) mqtt: subscribed: dt/esp32-ota-poc-02/cmd␛[0m
+␛[0;32mI (5313) ota: (re)subscribing to job topics␛[0m
+␛[0;32mI (5321) mqtt: subscribed: $aws/things/esp32-ota-poc-02/jobs/start-next/accepted␛[0m
+␛[0;32mI (5322) ota: requesting job document␛[0m
+␛[0;32mI (5508) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.␛[0m
+␛[0;32mI (5509) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (5524) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (5525) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (34341) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (34342) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (64306) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (64307) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+Disconnected (read failed: [Errno 6] Device not configured)
+Reconnecting to /dev/cu.usbmodem211301 .	 Connected!
+I (3033) wifi:new:<6,0>, old:<1,0>, ap:<255,255>, sta:<6,0>, prof:1, snd_ch_cfg:0x0
+I (3035) wifi:state: init -> auth (0xb0)
+I (3049) wifi:state: auth -> assoc (0x0)
+I (3056) wifi:state: assoc -> run (0x10)
+I (3069) wifi:connected with bananas, aid = 8, channel 6, BW20, bssid = b0:e4:d5:6a:f3:8d
+I (3070) wifi:security: WPA2-PSK, phy: bgn, rssi: -53
+I (3074) wifi:pm start, type: 1
+
+I (3074) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us
+I (3082) wifi:set rx beacon pti, rx_bcn_pti: 0, bcn_timeout: 25000, mt_pti: 0, mt_time: 10000
+I (3097) wifi:<ba-add>idx:0 (ifx:0, b0:e4:d5:6a:f3:8d), tid:6, ssn:2, winSize:64
+I (3105) wifi:dp: 2, bi: 102400, li: 4, scale listen interval from 307200 us to 409600 us
+I (3105) wifi:AP's beacon interval = 102400 us, DTIM period = 2
+I (3325) wifi:<ba-add>idx:1 (ifx:0, b0:e4:d5:6a:f3:8d), tid:0, ssn:0, winSize:64
+␛[0;32mI (4092) esp_netif_handlers: sta ip: 192.168.86.56, mask: 255.255.255.0, gw: 192.168.86.1␛[0m
+␛[0;32mI (4093) wifi: got IP 192.168.86.56␛[0m
+␛[0;32mI (4097) device_iot: up — backend 'https', firmware v2.0.0␛[0m
+␛[0;32mI (4102) app: running on 'https' backend, v2.0.0 (vGOOD)␛[0m
+␛[0;32mI (5478) coreMQTT: MQTT connection established with the broker.␛[0m
+␛[0;32mI (5479) mqtt: MQTT connected to AWS IoT Core as 'esp32-ota-poc-02'␛[0m
+␛[0;32mI (5490) mqtt: subscribed: dt/esp32-ota-poc-02/cmd␛[0m
+␛[0;32mI (5490) ota: (re)subscribing to job topics␛[0m
+␛[0;32mI (5497) mqtt: subscribed: $aws/things/esp32-ota-poc-02/jobs/start-next/accepted␛[0m
+␛[0;32mI (5499) ota: requesting job document␛[0m
+␛[0;32mI (5806) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (5807) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (5859) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.␛[0m
+␛[0;32mI (5860) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (5889) AWS_OTA: otaPal_SetPlatformImageState, 2␛[0m
+␛[0;32mI (5889) AWS_OTA: Set image as valid one!␛[0m
+␛[0;32mI (5890) esp_ota_ops: aws_esp_ota_get_boot_flags: 1␛[0m
+␛[0;32mI (5894) esp_ota_ops: [1] aflags/seq:0x2/0x3, pflags/seq:0x3/0x0␛[0m
+␛[0;33mW (5901) AWS_OTA: Image not in self test mode 2␛[0m
+␛[0;32mI (5906) esp_ota_ops: aws_esp_ota_get_boot_flags: 1␛[0m
+␛[0;32mI (5911) esp_ota_ops: [1] aflags/seq:0x2/0x3, pflags/seq:0x3/0x0␛[0m
+␛[0;32mI (5918) AWS_OTA: Writing to partition subtype 17 at offset 0x240000␛[0m
+␛[0;32mI (7344) AWS_OTA: esp_ota_begin succeeded␛[0m
+␛[0;32mI (7344) ota: OTA job accepted (HTTP data path), 987232 bytes␛[0m
+␛[0;32mI (7345) ota: reporting job AFR_OTA-esp32-ota-https-3-0-0-1782887946 -> IN_PROGRESS␛[0m
+␛[0;32mI (7523) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.␛[0m
+␛[0;32mI (7524) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (7854) ota: downloading ld bytes over HTTPS␛[0m
+␛[0;32mI (8450) ota: downloaded 102400 / 987232 bytes (10%)␛[0m
+␛[0;32mI (9011) ota: downloaded 200704 / 987232 bytes (20%)␛[0m
+␛[0;32mI (9616) ota: downloaded 299008 / 987232 bytes (30%)␛[0m
+␛[0;32mI (10117) ota: downloaded 397312 / 987232 bytes (40%)␛[0m
+␛[0;32mI (10666) ota: downloaded 495616 / 987232 bytes (50%)␛[0m
+␛[0;32mI (11247) ota: downloaded 593920 / 987232 bytes (60%)␛[0m
+␛[0;32mI (11761) ota: downloaded 692224 / 987232 bytes (70%)␛[0m
+␛[0;32mI (12340) ota: downloaded 790528 / 987232 bytes (80%)␛[0m
+␛[0;32mI (12931) ota: downloaded 888832 / 987232 bytes (90%)␛[0m
+␛[0;32mI (13411) ota: downloaded 987232 / 987232 bytes (100%)␛[0m
+␛[0;32mI (13414) ota: download complete (987232 bytes)␛[0m
+␛[0;32mI (13415) ota: verifying signature + closing file␛[0m
+␛[0;32mI (13719) AWS_OTA: Signature verification succeeded.␛[0m
+␛[0;32mI (13720) ota: ␛[1;32msignature OK -> activating + rebooting␛[0m␛[0m
+␛[0;32mI (13722) esp_image: segment 0: paddr=00240020 vaddr=3c0b0020 size=32af4h (207604) map␛[0m
+␛[0;32mI (13758) esp_image: segment 1: paddr=00272b1c vaddr=3fc99700 size=04fcch ( 20428) ␛[0m
+␛[0;32mI (13762) esp_image: segment 2: paddr=00277af0 vaddr=40374000 size=08528h ( 34088) ␛[0m
+␛[0;32mI (13769) esp_image: segment 3: paddr=00280020 vaddr=42000020 size=a3ee4h (671460) map␛[0m
+␛[0;32mI (13863) esp_image: segment 4: paddr=00323f0c vaddr=4037c528 size=0d124h ( 53540) ␛[0m
+␛[0;32mI (13871) esp_image: segment 0: paddr=00240020 vaddr=3c0b0020 size=32af4h (207604) map␛[0m
+␛[0;32mI (13900) esp_image: segment 1: paddr=00272b1c vaddr=3fc99700 size=04fcch ( 20428) ␛[0m
+␛[0;32mI (13904) esp_image: segment 2: paddr=00277af0 vaddr=40374000 size=08528h ( 34088) ␛[0m
+␛[0;32mI (13911) esp_image: segment 3: paddr=00280020 vaddr=42000020 size=a3ee4h (671460) map␛[0m
+␛[0;32mI (14005) esp_image: segment 4: paddr=00323f0c vaddr=4037c528 size=0d124h ( 53540) ␛[0m
+I (14530) wifi:state: run -> init (0x0)
+I (14533) wifi:pm stop, total sleep time: lu us / lu us
+
+I (14533) wifi:<ba-del>idx:1, tid:0
+I (14534) wifi:<ba-del>idx:0, tid:6
+I (14535) wifi:new:<6,0>, old:<6,0>, ap:<255,255>, sta:<6,0>, prof:1, snd_ch_cfg:0x0
+␛[0;31mE (14545) network_transport: Error reading the message␛[0m
+␛[0;31mE (14548) coreMQTT: Call to receiveSingleIteration failed. Status=MQTTRecvFailed␛[0m
+␛[0;31mE (14556) mqtt: process loop error: MQTTRecvFailed -> reconnecting␛[0m
+␛[0;33mW (14564) app: offline␛[0m
+␛[0;31mE (14567) esp-tls: [sock=54] connect() error: Host is unreachable␛[0m
+I (14573) wifi:flush txq
+␛[0;31mE (14573) esp-tls: Failed to open new connection␛[0m
+I (14575) wifi:stop sw txq
+␛[0;31mE (14580) mqtt: TLS connect to a2fm5sbtk65rj6-ats.iot.us-east-1.amazonaws.com:8883 failed␛[0m
+I (14583) wifi:lmac stop hw txq
+ESP-ROM:esp32s3-20210327
+Build:Mar 27 2021
+rst:0xc (RTC_SW_CPU_RST),boot:0x28 (SPI_FAST_FLASH_BOOT)
+Saved PC:0x4037acca
+SPIWP:0xee
+mode:DIO, clock div:1
+load:0x3fce2810,len:0xfb4
+load:0x403c8700,len:0x4
+load:0x403c8704,len:0xad8
+load:0x403cb700,len:0x2ce0
+entry 0x403c8888
+␛[0;32mI (236) cpu_start: Multicore app␛[0m
+␛[0;32mI (245) cpu_start: Pro cpu start user code␛[0m
+␛[0;32mI (245) cpu_start: cpu freq: 160000000 Hz␛[0m
+␛[0;32mI (246) app_init: Application information:␛[0m
+␛[0;32mI (248) app_init: Project name:     esp_ota␛[0m
+␛[0;32mI (253) app_init: App version:      1.0.0␛[0m
+␛[0;32mI (258) app_init: Compile time:     Jul  1 2026 01:56:13␛[0m
+␛[0;32mI (264) app_init: ELF file SHA256:  3290495eb...␛[0m
+␛[0;32mI (269) app_init: ESP-IDF:          5.3.1␛[0m
+␛[0;32mI (274) efuse_init: Min chip rev:     v0.0␛[0m
+␛[0;32mI (279) efuse_init: Max chip rev:     v0.99 ␛[0m
+␛[0;32mI (283) efuse_init: Chip rev:         v0.2␛[0m
+␛[0;32mI (288) heap_init: Initializing. RAM available for dynamic allocation:␛[0m
+␛[0;32mI (296) heap_init: At 3FCA7A00 len 00041D10 (263 KiB): RAM␛[0m
+␛[0;32mI (302) heap_init: At 3FCE9710 len 00005724 (21 KiB): RAM␛[0m
+␛[0;32mI (308) heap_init: At 3FCF0000 len 00008000 (32 KiB): DRAM␛[0m
+␛[0;32mI (314) heap_init: At 600FE100 len 00001EE8 (7 KiB): RTCRAM␛[0m
+␛[0;32mI (321) spi_flash: detected chip: generic␛[0m
+␛[0;32mI (325) spi_flash: flash io: dio␛[0m
+␛[0;32mI (329) sleep: Configure to isolate all GPIO pins in sleep state␛[0m
+␛[0;32mI (336) sleep: Enable automatic switching of GPIO sleep configuration␛[0m
+␛[0;32mI (343) esp_core_dump_flash: Init core dump to flash␛[0m
+␛[0;32mI (349) esp_core_dump_flash: Found partition 'coredump' @ 3e2000 65536 bytes␛[0m
+D (356) esp_core_dump_flash: Blank core dump partition!␛[0m
+␛[0;32mI (362) main_task: Started on CPU0␛[0m
+␛[0;32mI (366) main_task: Calling app_main()␛[0m
+␛[0;32mI (370) gpio: GPIO[48]| InputEn: 0| OutputEn: 0| OpenDrain: 0| Pullup: 1| Pulldown: 0| Intr:0 ␛[0m
+␛[0;32mI (383) device_iot: esp_secure_cert: Thing name from cert CN = 'esp32-ota-poc-02'␛[0m
+␛[0;32mI (388) device_iot: esp_secure_cert: device key plaintext in partition␛[0m
+␛[0;32mI (418) self_test: ----------------------------------------------------------␛[0m
+␛[0;32mI (419) self_test:  firmware v3.0.0   variant=vGOOD␛[0m
+␛[0;32mI (421) self_test:  running partition: ota_1 @ 0x240000  (ota state 1)␛[0m
+␛[0;32mI (428) self_test:  reset reason: 3   free heap: 299024␛[0m
+␛[0;32mI (434) self_test: ----------------------------------------------------------␛[0m
+␛[0;33mW (442) self_test: self-test watchdog armed (180000 ms)␛[0m
+␛[0;32mI (449) pp: pp rom version: e7ae62f␛[0m
+␛[0;32mI (452) net80211: net80211 rom version: e7ae62f␛[0m
+I (458) wifi:wifi driver task: 3fcb2ec8, prio:23, stack:6144, core=0
+I (476) wifi:wifi firmware version: ccaebfa
+I (477) wifi:wifi certification version: v7.0
+I (477) wifi:config NVS flash: enabled
+I (477) wifi:config nano formating: enabled
+I (481) wifi:Init data frame dynamic rx buffer num: 32
+I (486) wifi:Init static rx mgmt buffer num: 5
+I (490) wifi:Init management short buffer num: 32
+I (494) wifi:Init dynamic tx buffer num: 32
+I (498) wifi:Init static tx FG buffer num: 2
+I (502) wifi:Init static rx buffer size: 1600
+I (507) wifi:Init static rx buffer num: 10
+I (510) wifi:Init dynamic rx buffer num: 32
+␛[0;32mI (515) wifi_init: rx ba win: 6␛[0m
+␛[0;32mI (518) wifi_init: accept mbox: 6␛[0m
+␛[0;32mI (522) wifi_init: tcpip mbox: 32␛[0m
+␛[0;32mI (526) wifi_init: udp mbox: 6␛[0m
+␛[0;32mI (530) wifi_init: tcp mbox: 6␛[0m
+␛[0;32mI (533) wifi_init: tcp tx win: 5760␛[0m
+␛[0;32mI (538) wifi_init: tcp rx win: 5760␛[0m
+␛[0;32mI (542) wifi_init: tcp mss: 1440␛[0m
+␛[0;32mI (546) wifi_init: WiFi IRAM OP enabled␛[0m
+␛[0;32mI (550) wifi_init: WiFi RX IRAM OP enabled␛[0m
+␛[0;32mI (557) phy_init: phy_version 680,a6008b2,Jun  4 2024,16:41:10␛[0m
+I (608) wifi:mode : sta (a0:f2:62:f4:56:84)
+I (609) wifi:enable tsf
+␛[0;32mI (610) wifi: connecting to SSID 'bananas'...␛[0m
+I (3022) wifi:new:<6,0>, old:<1,0>, ap:<255,255>, sta:<6,0>, prof:1, snd_ch_cfg:0x0
+I (3023) wifi:state: init -> auth (0xb0)
+I (3032) wifi:state: auth -> assoc (0x0)
+I (3043) wifi:state: assoc -> run (0x10)
+I (3060) wifi:connected with bananas, aid = 8, channel 6, BW20, bssid = b0:e4:d5:6a:f3:8d
+I (3061) wifi:security: WPA2-PSK, phy: bgn, rssi: -50
+I (3065) wifi:pm start, type: 1
+
+I (3065) wifi:dp: 1, bi: 102400, li: 3, scale listen interval from 307200 us to 307200 us
+I (3073) wifi:set rx beacon pti, rx_bcn_pti: 0, bcn_timeout: 25000, mt_pti: 0, mt_time: 10000
+I (3086) wifi:<ba-add>idx:0 (ifx:0, b0:e4:d5:6a:f3:8d), tid:6, ssn:2, winSize:64
+I (3142) wifi:dp: 2, bi: 102400, li: 4, scale listen interval from 307200 us to 409600 us
+I (3142) wifi:AP's beacon interval = 102400 us, DTIM period = 2
+␛[0;32mI (4083) esp_netif_handlers: sta ip: 192.168.86.56, mask: 255.255.255.0, gw: 192.168.86.1␛[0m
+␛[0;32mI (4084) wifi: got IP 192.168.86.56␛[0m
+I (4090) wifi:<ba-add>idx:1 (ifx:0, b0:e4:d5:6a:f3:8d), tid:0, ssn:0, winSize:64
+␛[0;32mI (5397) coreMQTT: MQTT connection established with the broker.␛[0m
+␛[0;32mI (5398) mqtt: MQTT connected to AWS IoT Core as 'esp32-ota-poc-02'␛[0m
+␛[0;33mW (5489) ota: trial boot detected — running self-test␛[0m
+␛[0;32mI (5489) self_test: core-function check: free heap = 204488␛[0m
+␛[0;32mI (5490) self_test: app health check -> PASS␛[0m
+␛[0;32mI (5514) self_test: ␛[1;32mimage COMMITTED (rollback cancelled)␛[0m␛[0m
+␛[0;32mI (5515) self_test: self-test watchdog disarmed␛[0m
+␛[0;32mI (5516) ota: reporting job AFR_OTA-esp32-ota-https-3-0-0-1782887946 -> SUCCEEDED␛[0m
+␛[0;32mI (5562) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (5563) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (5745) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.␛[0m
+␛[0;32mI (5745) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (10525) ota: (re)subscribing to job topics␛[0m
+␛[0;32mI (10535) mqtt: subscribed: $aws/things/esp32-ota-poc-02/jobs/start-next/accepted␛[0m
+␛[0;32mI (10536) ota: requesting job document␛[0m
+␛[0;32mI (10536) device_iot: up — backend 'https', firmware v3.0.0␛[0m
+␛[0;32mI (10650) mqtt: subscribed: dt/esp32-ota-poc-02/cmd␛[0m
+␛[0;32mI (10651) app: running on 'https' backend, v3.0.0 (vGOOD)␛[0m
+␛[0;32mI (10868) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (10870) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (10883) coreMQTT: De-serialized incoming PUBLISH packet: DeserializerResult=MQTTSuccess.␛[0m
+␛[0;32mI (10884) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (40948) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (40949) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (70752) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (70752) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (100788) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (100789) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (130852) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (130853) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (160759) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (160760) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (190777) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (190778) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (220794) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+␛[0;32mI (220794) coreMQTT: State record updated. New state=MQTTPublishDone.␛[0m
+␛[0;32mI (250765) coreMQTT: Ack packet deserialized with result: MQTTSuccess.␛[0m
+```

@@ -15,5 +15,9 @@
 dependencies:
   espressif/cbor:
     version: "^0.6.1~4"     # match the file-streams lib's spec to avoid a resolver conflict
+  espressif/esp_secure_cert_mgr:
+    version: "^2.0.8"       # device cert + key + Thing name (cert CN) read at runtime from the
+                            # esp_secure_cert partition — the sole device-identity source, and
+                            # linked into every env (same anti-pruning reason as cbor above).
   idf:
     version: ">=5.3"

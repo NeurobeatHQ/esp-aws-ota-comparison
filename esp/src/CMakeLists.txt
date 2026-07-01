@@ -13,10 +13,12 @@ set(srcs
     "device_iot.c"
     "wifi.c"
     "self_test.c"
+    "led.c"
 )
 set(reqs
     nvs_flash esp_wifi esp_event esp_netif esp-tls
     app_update esp_partition esp_timer esp_system driver
+    esp_secure_cert_mgr
 )
 
 if(OTA_BACKEND STREQUAL "mqtt")
@@ -48,8 +50,6 @@ if(NOT CMAKE_SCRIPT_MODE_FILE)
         -P "${CMAKE_CURRENT_LIST_DIR}/../embed_certs.cmake")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
         "${CMAKE_CURRENT_LIST_DIR}/certs/AmazonRootCA1.pem"
-        "${CMAKE_CURRENT_LIST_DIR}/certs/client.crt"
-        "${CMAKE_CURRENT_LIST_DIR}/certs/client.key"
         "${CMAKE_CURRENT_LIST_DIR}/certs/aws_codesign.crt")
 endif()
 list(APPEND srcs "${EMBEDDED_CERTS_C}")

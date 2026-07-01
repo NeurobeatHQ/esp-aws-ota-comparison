@@ -1,0 +1,42 @@
+# Application Wi-Fi station options (read by src/wifi.c). Kconfig.projbuild puts these
+# at the top level of `menuconfig`; values live in sdkconfig.defaults (committed) and
+# the generated per-env sdkconfig. Mirrors ESP-IDF's wifi/fast_scan example.
+menu "Application Wi-Fi"
+
+    choice APP_WIFI_SCAN_METHOD
+        prompt "Wi-Fi scan method"
+        default APP_WIFI_ALL_CHANNEL_SCAN
+        help
+            FAST_SCAN associates with the FIRST SSID match the scan finds — on a mesh /
+            multi-AP network (many nodes, one SSID) that is often a distant node (weak
+            RSSI -> lost DHCP/DNS UDP -> "getaddrinfo() returns 202"). ALL_CHANNEL_SCAN
+            scans every channel and picks the best match per the sort method below.
+
+        config APP_WIFI_FAST_SCAN
+            bool "Fast scan (first SSID match)"
+        config APP_WIFI_ALL_CHANNEL_SCAN
+            bool "All-channel scan (choose best AP)"
+    endchoice
+
+    choice APP_WIFI_SORT_METHOD
+        prompt "AP preference for all-channel scan"
+        default APP_WIFI_CONNECT_AP_BY_SIGNAL
+        help
+            Among SSID matches (all-channel scan only), which AP to associate with.
+
+        config APP_WIFI_CONNECT_AP_BY_SIGNAL
+            bool "Strongest signal (RSSI)"
+        config APP_WIFI_CONNECT_AP_BY_SECURITY
+            bool "Strongest security (authmode)"
+    endchoice
+
+    config APP_WIFI_SCAN_RSSI_THRESHOLD
+        int "Minimum AP RSSI to associate, dBm (0 = no threshold)"
+        range -127 0
+        default 0
+        help
+            Refuse to associate with an AP weaker than this (dBm); 0 disables the check.
+            Caution: too strict a floor means the board won't connect at all when only a
+            weak AP is in range.
+
+endmenu

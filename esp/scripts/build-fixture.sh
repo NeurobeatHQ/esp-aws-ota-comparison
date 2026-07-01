@@ -27,6 +27,13 @@ export PLATFORMIO_BUILD_FLAGS="-DAPP_VERSION_MAJOR=$MAJ -DAPP_VERSION_MINOR=$MIN
 echo ">> building '$env/$variant' v$version"
 echo ">> $PLATFORMIO_BUILD_FLAGS"
 
+# macOS drops .DS_Store files into build dirs. When a config change (platformio.ini /
+# sdkconfig / partitions.csv) makes PlatformIO wipe .pio/build for a clean rebuild, that
+# stray file makes the recursive remove fail with ENOTEMPTY ("Can not remove temporary
+# directory .pio/build"). Sweep them first. (Also: don't leave .pio/build open in Finder
+# during a build — Finder re-creates .DS_Store mid-wipe and can re-trigger this.)
+find .pio -name .DS_Store -delete 2>/dev/null || true
+
 # Recompile the app sources (which read the version/variant macros) while keeping
 # the heavy ESP-IDF / esp-aws-iot objects cached.
 rm -rf ".pio/build/$env/src"

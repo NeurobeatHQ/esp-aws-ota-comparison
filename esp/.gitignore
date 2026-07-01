@@ -1,18 +1,30 @@
 # PlatformIO / ESP-IDF build output
 .pio/
 build/
+# Each env's active config is generated and OVERRIDES sdkconfig.defaults, so track
+# only sdkconfig.defaults (the committed source of truth) and ignore every
+# sdkconfig.<env> (mqtt/https/jobs/manual/…) plus the bare/old variants.
 sdkconfig
-sdkconfig.old
-sdkconfig.feather_s3
-sdkconfig.devkitc_s3
+sdkconfig.*
+!sdkconfig.defaults
 managed_components/
 dependencies.lock
 
 # Built fixtures
 fixtures/
 
+# Dedicated venv the provisioning script auto-creates for the esp_secure_cert tool deps
+.provision-venv/
+
 # Secrets (copy secrets.h.example -> secrets.h)
 src/secrets.h
 
-# Real device credentials — keep the committed placeholders, never commit real ones.
-# (If you overwrite the placeholders with real creds, do not `git add` them.)
+# Device identity lives in the esp_secure_cert partition, not the repo. client.crt/key/pub
+# are transient per-board inputs for scripts/provision-secure-cert.sh — never commit them.
+# (Only the public AmazonRootCA1.pem + aws_codesign.crt under src/certs/ stay tracked.)
+src/certs/client.crt
+src/certs/client.key
+src/certs/client.pub
+
+# Tool-generated partition image (CONTAINS THE DEVICE PRIVATE KEY) — never commit.
+esp_secure_cert_data/

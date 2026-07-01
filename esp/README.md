@@ -93,9 +93,9 @@ that implement the two contracts, add an `elseif` in `src/CMakeLists.txt`, and a
 
 ```bash
 cp src/secrets.h.example src/secrets.h    # Wi-Fi + endpoint + Thing name
-pio run -e mqtt                            # (or https | jobs | manual)
-pio run -e mqtt -t upload -t monitor
-scripts/build-fixture.sh mqtt good 2.0.0   # vGOOD/vBAD fixture per backend
+pio run -e https                            # (or https | jobs | manual)
+pio run -e https -t upload -t monitor
+scripts/build-fixture.sh https good 2.0.0   # vGOOD/vBAD fixture per backend
 ```
 
 Anti-brick behaviour, partition table, and the `FW_SELFTEST_SHOULD_PASS`

@@ -27,12 +27,30 @@ backend_uses_signer() { case "$BACKEND" in mqtt|https)      return 0 ;; *) retur
 need() { command -v "$1" >/dev/null 2>&1 || { echo "error: '$1' not found on PATH" >&2; exit 1; }; }
 need aws; need jq
 
+# Fail fast — with the REAL reason — when AWS credentials are missing or expired.
+# Without this the first AWS call dies inside cfn_output() (whose stderr goes to
+# /dev/null), and load_stack() then misreports it as "deploy the stack first".
+# On success ACCOUNT holds the 12-digit account id, for callers to reuse.
+aws_preflight() {
+  ACCOUNT="$(aws sts get-caller-identity --query Account --output text 2>&1)" || true
+  if ! printf '%s' "$ACCOUNT" | grep -qE '^[0-9]{12}$'; then
+    {
+      echo "error: AWS credentials are missing or expired (region '$AWS_REGION')."
+      printf '%s\n' "$ACCOUNT" | sed '/^[[:space:]]*$/d; s/^/  aws: /'
+      echo "  -> Authenticate, then re-run. The line above names the command for your"
+      echo "     setup (commonly: aws login | aws sso login | export AWS_PROFILE=<p>)."
+    } >&2
+    exit 1
+  fi
+}
+
 cfn_output() {
   aws cloudformation describe-stacks --stack-name "$STACK_NAME" \
     --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text 2>/dev/null
 }
 
 load_stack() {
+  aws_preflight   # clear "you're not logged in" message before the silent cfn_output calls
   THING_NAME="$(cfn_output ThingName)"
   THING_GROUP_NAME="$(cfn_output ThingGroupName)"
   POLICY_NAME="$(cfn_output PolicyName)"

@@ -19,6 +19,19 @@ static const char *TAG = "wifi";
 
 #define WIFI_CONNECTED_BIT  BIT0
 
+/* AP-selection policy from Kconfig (src/Kconfig.projbuild). Defaults: all-channel scan
+ * + connect to the strongest RSSI, so a shared-SSID mesh doesn't strand us on a far AP. */
+#if CONFIG_APP_WIFI_ALL_CHANNEL_SCAN
+#define APP_SCAN_METHOD  WIFI_ALL_CHANNEL_SCAN
+#else
+#define APP_SCAN_METHOD  WIFI_FAST_SCAN
+#endif
+#if CONFIG_APP_WIFI_CONNECT_AP_BY_SECURITY
+#define APP_SORT_METHOD  WIFI_CONNECT_AP_BY_SECURITY
+#else
+#define APP_SORT_METHOD  WIFI_CONNECT_AP_BY_SIGNAL
+#endif
+
 static EventGroupHandle_t s_wifi_events;
 static volatile bool s_connected;
 
@@ -63,6 +76,13 @@ esp_err_t wifi_start(void)
     strncpy((char *)wifi_config.sta.ssid, WIFI_SSID, sizeof(wifi_config.sta.ssid) - 1);
     strncpy((char *)wifi_config.sta.password, WIFI_PASSWORD, sizeof(wifi_config.sta.password) - 1);
     wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+    /* AP selection (Kconfig menu "Application Wi-Fi", src/Kconfig.projbuild). All-channel
+     * scan + strongest-RSSI by default, so a shared-SSID mesh doesn't strand us on a far
+     * node (weak RSSI -> lost DHCP/DNS UDP -> "getaddrinfo() returns 202"). sort_method
+     * applies only to a full scan; threshold.rssi=0 means no floor. */
+    wifi_config.sta.scan_method    = APP_SCAN_METHOD;
+    wifi_config.sta.sort_method    = APP_SORT_METHOD;
+    wifi_config.sta.threshold.rssi = CONFIG_APP_WIFI_SCAN_RSSI_THRESHOLD;
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));

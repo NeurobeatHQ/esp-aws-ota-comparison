@@ -16,7 +16,8 @@ function(emit_array name file)
 endfunction()
 
 file(WRITE "${OUT}" "/* AUTO-GENERATED from certs/ by embed_certs.cmake — do not edit. */\n\n")
+# The device cert + key are NOT embedded — they live in the esp_secure_cert partition
+# (provisioned per board). Only the public root CA (server trust) and the code-signing
+# cert (OTA image verify) are baked into the image.
 emit_array(aws_root_ca_pem   "${CERT_DIR}/AmazonRootCA1.pem")
-emit_array(device_cert_pem   "${CERT_DIR}/client.crt")
-emit_array(device_key_pem    "${CERT_DIR}/client.key")
 emit_array(codesign_cert_pem "${CERT_DIR}/aws_codesign.crt")

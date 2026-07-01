@@ -52,10 +52,6 @@ extern const unsigned char codesign_cert_pem[];
 #define OTA_MAX_SIGNATURE_SIZE     384U
 #define NUM_OF_BLOCKS_REQUESTED    1U
 
-#define OTA_TOPIC_PREFIX                   "$aws/things/+/"
-#define OTA_JOB_NOTIFY_TOPIC_FILTER        OTA_TOPIC_PREFIX "jobs/notify-next"
-#define OTA_JOB_NOTIFY_TOPIC_FILTER_LEN    ((uint16_t)(sizeof(OTA_JOB_NOTIFY_TOPIC_FILTER) - 1))
-
 /* OTA MQTT control/status return status (mirrors the reference's local enum). */
 typedef enum { OtaMqttSuccess = 0, OtaMqttPublishFailed, OtaMqttSubscribeFailed } OtaMqttStatus_t;
 
@@ -73,7 +69,7 @@ static OtaJobEventData_t    jobDocBuffer;
 static AfrOtaJobDocumentFields_t jobFields;
 static uint8_t              OtaImageSignatureDecoded[OTA_MAX_SIGNATURE_SIZE];
 
-static OtaState_t        otaAgentState = OtaAgentStateInit;
+static OtaState_t        s_ota_state = OtaAgentStateInit;
 static SemaphoreHandle_t bufferSemaphore;
 static volatile bool     s_ready;
 
@@ -324,12 +320,9 @@ void ota_backend_on_publish(const char *topic, size_t topic_len,
         return;
     }
 
-    /* The start-next/accepted job document, or a notify-next push? */
+    /* Deferred-to-boot: only the start-next/accepted job document; notify-next pushes
+     * are neither subscribed nor handled. */
     bool isJob = Jobs_IsStartNextAccepted(topic, topic_len, device_iot_thing_name(), strlen(device_iot_thing_name()));
-    if (!isJob) {
-        (void)MQTT_MatchTopic(topic, topic_len, OTA_JOB_NOTIFY_TOPIC_FILTER,
-                              OTA_JOB_NOTIFY_TOPIC_FILTER_LEN, &isJob);
-    }
     if (isJob) {
         size_t n = payload_len <= sizeof(jobDocBuffer.jobData) ? payload_len : sizeof(jobDocBuffer.jobData);
         memcpy(jobDocBuffer.jobData, payload, n);
@@ -352,7 +345,7 @@ static void processOTAEvents(void)
         case OtaAgentEventRequestJobDocument:
             ESP_LOGI(TAG, "requesting job document");
             requestJobDocumentHandler();
-            otaAgentState = OtaAgentStateRequestingJob;
+            s_ota_state = OtaAgentStateRequestingJob;
             break;
 
         case OtaAgentEventReceivedJobDocument:
@@ -360,17 +353,17 @@ static void processOTAEvents(void)
                 case OtaPalJobDocFileCreated:
                     nextEvent.eventId = OtaAgentEventRequestFileBlock;
                     OtaSendEvent_FreeRTOS(&nextEvent);
-                    otaAgentState = OtaAgentStateCreatingFile;
+                    s_ota_state = OtaAgentStateCreatingFile;
                     break;
                 default:
                     /* Not an actionable OTA job; keep waiting for the next one. */
-                    otaAgentState = OtaAgentStateWaitingForJob;
+                    s_ota_state = OtaAgentStateWaitingForJob;
                     break;
             }
             break;
 
         case OtaAgentEventRequestFileBlock:
-            otaAgentState = OtaAgentStateRequestingFileBlock;
+            s_ota_state = OtaAgentStateRequestingFileBlock;
             if (currentBlockOffset == 0) {
                 ESP_LOGI(TAG, "starting download");
             }
@@ -429,14 +422,14 @@ static void processOTAEvents(void)
                 reportJobStatus(globalJobId, "FAILED");
                 ota_nvs_clear_job_id();
                 globalJobId[0] = '\0';
-                otaAgentState = OtaAgentStateWaitingForJob;
+                s_ota_state = OtaAgentStateWaitingForJob;
             }
             break;
 
         case OtaAgentEventActivateImage:
             ESP_LOGI(TAG, "activating + rebooting into new image...");
             imageActivationHandler();   /* reboots; should not return */
-            otaAgentState = OtaAgentStateStopped;
+            s_ota_state = OtaAgentStateStopped;
             break;
 
         default:
@@ -447,11 +440,8 @@ static void processOTAEvents(void)
 static void otaTask(void *arg)
 {
     (void)arg;
-    /* Let the job-topic SUBSCRIBEs be acknowledged before the first StartNext so
-     * its start-next/accepted response isn't published before we're listening. */
-    vTaskDelay(pdMS_TO_TICKS(1000));
-    OtaEventMsg_t initEvent = { .eventId = OtaAgentEventRequestJobDocument };
-    OtaSendEvent_FreeRTOS(&initEvent);
+    /* No initial StartNext here: device_iot drives subscribe+request via the
+     * connect path (ota_backend_on_reconnect), so it fires exactly once. */
     for (;;) {
         processOTAEvents();
     }
@@ -501,11 +491,8 @@ static void prvSubscribeJobTopics(void)
 {
     char topic[JOBS_API_MAX_LENGTH(MAX_THING_NAME_LEN)] = { 0 };
     size_t len = 0;
-    if (Jobs_GetTopic(topic, sizeof(topic), device_iot_thing_name(), strlen(device_iot_thing_name()),
-                      JobsNextJobChanged, &len) == JobsSuccess) {
-        prvSubscribe(topic, (uint16_t)len, 1);
-    }
-    len = 0;
+    /* Deferred-to-boot: NOT subscribed to notify-next (the live push). Jobs are
+     * picked up only via our own StartNext at (re)connect. Only start-next/accepted. */
     if (Jobs_GetTopic(topic, sizeof(topic), device_iot_thing_name(), strlen(device_iot_thing_name()),
                       JobsStartNextSuccess, &len) == JobsSuccess) {
         prvSubscribe(topic, (uint16_t)len, 1);
@@ -536,10 +523,8 @@ void ota_backend_start(void)
         resolve_trial_boot();
     }
 
-    prvSubscribeJobTopics();
-
     s_ready = true;
-    otaAgentState = OtaAgentStateReady;
+    s_ota_state = OtaAgentStateReady;
 
     if (xTaskCreate(otaTask, "ota", OTA_TASK_STACK_SIZE, NULL, OTA_TASK_PRIORITY, NULL) != pdPASS) {
         ESP_LOGE(TAG, "failed to create OTA task");

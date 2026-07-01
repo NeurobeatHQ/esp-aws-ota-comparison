@@ -40,6 +40,19 @@ CONFIG_MBEDTLS_ASYMMETRIC_CONTENT_LEN=y
 # CONFIG_MBEDTLS_DYNAMIC_BUFFER is not set
 # CONFIG_MBEDTLS_SSL_VARIABLE_BUFFER_LENGTH is not set
 
+# --- esp_secure_cert key format --
+# Selects which on-flash key format device_iot_default_config() reads, because
+# esp_secure_cert_mgr exposes a DIFFERENT read API for each (they're mutually
+# exclusive). =n -> plaintext key in the esp_secure_cert partition (cust_flash_tlv;
+# the provision-secure-cert.sh default). Set =y to read a DS-peripheral-wrapped key
+# (provision with --ds). Must match how the partition was provisioned. Harmless in
+# the default embedded-PEM build (esp_secure_cert_mgr is then dropped by --gc-sections).
+# PRECEDENCE: PlatformIO persists each env's active config in sdkconfig.<env>, which
+# OVERRIDES this file once it exists. To switch an env to DS, set =y in that env's
+# sdkconfig.<env> (or delete sdkconfig.<env> to re-seed it from here) — editing only
+# this file has no effect on an env whose sdkconfig.<env> already pins the key.
+CONFIG_ESP_SECURE_CERT_DS_PERIPHERAL=n
+
 # --- Task watchdog: we drive it manually during the self-test ----------------
 CONFIG_ESP_TASK_WDT_INIT=n
 
@@ -53,9 +66,32 @@ CONFIG_FREERTOS_HZ=1000
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
 
-# --- Coredump to flash partition (debugging rollbacks) -----------------------
+# --- Crash dump: call-stacks -> coredump partition (retrievable for MQTT) -----
+# On a panic an ELF coredump is written to the `coredump` flash partition: the
+# crashed task + all task stacks/TCBs — i.e. the call stacks the backtrace is
+# unwound from — and the backtrace is also printed to the console. At next boot
+# esp_core_dump_image_get() reads it back so it can be forwarded to MQTT, then
+# esp_core_dump_image_erase() clears the slot. CAPTURE_DRAM is left OFF, so it is
+# the call stacks only, NOT the full RAM/heap. (Caveat: a stack can still hold a
+# sensitive local at crash time — pair with Flash Encryption at rest, and redact
+# before upload if that matters; or capture only the backtrace PCs, see below.)
 CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_ESP_SYSTEM_PANIC_PRINT_REBOOT=y
+
+# --- esp_secure_cert: default to the plaintext key format, NOT the DS peripheral.
+# Pinned here (not just in the generated sdkconfig.<env>) so a regenerated per-env
+# config can't default to DS and mismatch the plaintext provision-secure-cert.sh.
+# Only consulted when built with -DUSE_ESP_SECURE_CERT=1; flip to =y for DS.
+CONFIG_ESP_SECURE_CERT_DS_PERIPHERAL=n
 
 # --- Newlib: nano printf keeps the binary inside a 1.56 MB slot --------------
 CONFIG_NEWLIB_NANO_FORMAT=y
+
+# --- Wi-Fi AP selection (src/Kconfig.projbuild, read by src/wifi.c) -----------
+# Scan every channel and associate with the STRONGEST same-SSID AP, so a shared-SSID
+# mesh doesn't strand the board on a distant node (weak RSSI -> lost DHCP/DNS UDP ->
+# "getaddrinfo() returns 202"). RSSI floor 0 = disabled (set e.g. -70 to refuse weak APs).
+CONFIG_APP_WIFI_ALL_CHANNEL_SCAN=y
+CONFIG_APP_WIFI_CONNECT_AP_BY_SIGNAL=y
+CONFIG_APP_WIFI_SCAN_RSSI_THRESHOLD=0

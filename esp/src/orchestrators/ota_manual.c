@@ -185,14 +185,12 @@ void ota_backend_start(void)
         resolve_trial_boot();
     }
 
-    subscribeControlTopics();
     s_ready = true;
 
     if (xTaskCreate(otaTask, "ctrl_ota", 6144, NULL, 4, NULL) != pdPASS) {
         ESP_LOGE(TAG, "failed to create control task");
         return;
     }
-    /* Ask the server on a normal boot. (A trial boot already confirmed above.) */
-    int evt = EVT_ASK;
-    xQueueSend(s_evt_queue, &evt, 0);
+    /* subscribe + ask happen via the connect path (ota_backend_on_reconnect),
+     * driven by device_iot — exactly once per connect. */
 }

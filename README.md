@@ -26,17 +26,23 @@ AWS IoT Jobs + MQTT File Streams + coreMQTT over mutual TLS — on pure ESP-IDF 
 - ⛳ **Not yet run on a live AWS account / flashed board** — needs your credentials
   and hardware. `SUCCEEDED` (happy path) and `FAILED`/`TIMED_OUT` (rollback) are the
   expected results of the documented steps, not yet observed. The Jobs control plane
-  subscribes to both `jobs/notify-next` and `jobs/start-next/accepted` and reports
-  `IN_PROGRESS → SUCCEEDED/FAILED`, so a pushed job is promoted off `QUEUED` rather
-  than risking a spurious `TIMED_OUT`.
+  subscribes to `jobs/start-next/accepted` and picks up a queued job via its own
+  `StartNext` at boot/reconnect — **deferred-to-boot**: it does *not* subscribe to the
+  live `notify-next` push, so a job pushed while the device runs waits until the next
+  boot. The `StartNext` promotes the job off `QUEUED` and reports
+  `IN_PROGRESS → SUCCEEDED/FAILED`, so there's no spurious `TIMED_OUT`.
 
 
 ## Architecture decisions
 
-- **Identity = mutual TLS** with an embedded plaintext device cert + key. The
-  transport keeps `use_secure_element` + `ds_data` fields, so moving the key to the
-  DS peripheral / `esp_secure_cert` later is a config change, not a protocol change.
-  DS provisioning is not implemented.
+- **Identity = mutual TLS, always from `esp_secure_cert`.** The device cert + private
+  key — and the Thing name, taken from the cert's subject CN — are read at runtime from
+  the on-flash `esp_secure_cert` partition, provisioned per board on-host by
+  [`esp/scripts/provision-secure-cert.sh`](esp/scripts/provision-secure-cert.sh). Nothing
+  device-specific is embedded, so ONE firmware image serves the whole fleet (see the
+  Fleet section in [`aws-iot/README.md`](aws-iot/README.md)). The key is a plaintext TLV
+  or a DS-peripheral-wrapped key (`--ds`); only the public root CA + code-signing cert
+  are baked into the `.bin`.
 - **Orchestration = AWS IoT Jobs**, created by the OTA Manager (`aws iot
   create-ota-update` → Signer job + Stream + Job).
 - **Authenticity:** the AWS Signer code signature (ECDSA-P256) is verified on-device
@@ -134,30 +140,29 @@ HTTPS transfer plus on-device Signer verify, at ~B's flash and ~17 KB less RAM t
 git submodule update --init --recursive          # pull esp-aws-iot + its libs
 
 # 1) Cloud resources  (one dir, backend chosen by BACKEND — here variant C)
-cd aws-iot && npm install && BACKEND=mqtt npx cdk deploy && cd ..
+cd aws-iot && npm install && BACKEND=https npx cdk deploy && cd ..
 
-# 2) Device identity + code-signing material (writes certs into esp/src/certs/)
-BACKEND=mqtt aws-iot/scripts/register-device.sh
-BACKEND=mqtt aws-iot/scripts/make-codesign-cert.sh    # (mqtt/https only; no-ops otherwise)
+# 2) Code-signing key, mqtt/https only (device identity is separate — see aws-iot/README "Fleet")
+BACKEND=https aws-iot/scripts/make-codesign-cert.sh    # jobs/manual: no-op
 
 # 3) Firmware: set Wi-Fi + endpoint + Thing name, build the initial image, flash
 cp esp/src/secrets.h.example esp/src/secrets.h        # then edit it
-esp/scripts/build-fixture.sh mqtt good 1.0.0          # backend = mqtt (C)
-cd esp && pio run -e mqtt -t upload -t monitor && cd ..
+esp/scripts/build-fixture.sh https good 1.0.0          # backend = https (D)
+cd esp && pio run -e https -t upload -t monitor && cd ..
 
 # 4) Happy-path OTA  (downloads, verifies, self-tests, COMMITS -> job SUCCEEDED)
-esp/scripts/build-fixture.sh mqtt good 2.0.0
-BACKEND=mqtt aws-iot/scripts/upload-firmware.sh esp/fixtures/firmware-mqtt-good-v2.0.0.bin 2.0.0
-BACKEND=mqtt aws-iot/scripts/push-update.sh esp32-ota-poc-01 2.0.0
-BACKEND=mqtt aws-iot/scripts/watch.sh       esp32-ota-poc-01
+esp/scripts/build-fixture.sh https good 2.0.0
+BACKEND=https aws-iot/scripts/upload-firmware.sh esp/fixtures/firmware-https-good-v2.0.0.bin 2.0.0
+BACKEND=https aws-iot/scripts/push-update.sh esp32-ota-poc-01 2.0.0
+BACKEND=https aws-iot/scripts/watch.sh       esp32-ota-poc-01
 
 # 5) Rollback OTA  (self-test fails -> device ROLLS BACK, stays alive -> job FAILED)
-esp/scripts/build-fixture.sh mqtt bad 2.0.0
-BACKEND=mqtt aws-iot/scripts/upload-firmware.sh esp/fixtures/firmware-mqtt-bad-v2.0.0.bin 2.0.0-bad
-BACKEND=mqtt aws-iot/scripts/push-update.sh esp32-ota-poc-01 2.0.0-bad
-BACKEND=mqtt aws-iot/scripts/watch.sh       esp32-ota-poc-01
+esp/scripts/build-fixture.sh https bad 2.0.0
+BACKEND=https aws-iot/scripts/upload-firmware.sh esp/fixtures/firmware-https-bad-v2.0.0.bin 2.0.0-bad
+BACKEND=https aws-iot/scripts/push-update.sh esp32-ota-poc-01 2.0.0-bad
+BACKEND=https aws-iot/scripts/watch.sh       esp32-ota-poc-01
 ```
-(Swap `mqtt` for `https`/`jobs`/`manual` in both `-e` and `BACKEND=` for any other
+(Swap `https` for `mqtt`/`jobs`/`manual` in both `-e` and `BACKEND=` for any other
 backend — the steps are otherwise identical.)
 
 ## Acceptance criteria → where
@@ -171,6 +176,7 @@ backend — the steps are otherwise identical.)
 
 ## Out of scope
 
-Secure Boot / Flash Encryption eFuse burns; DS-peripheral provisioning; recovery/
-factory image + captive portal; A/B identity re-key; custom server-driven control
-plane. Managed AWS IoT Core path only.
+Secure Boot / Flash Encryption eFuse burns; recovery/factory image + captive portal;
+A/B identity re-key; custom server-driven control plane. Managed AWS IoT Core path
+only. (`esp_secure_cert` credential provisioning — including the DS peripheral — *is*
+wired; see **Identity** above. The irreversible eFuse burn on real units is yours.)

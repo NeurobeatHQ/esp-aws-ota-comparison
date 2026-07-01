@@ -1,24 +1,25 @@
-# ESP32-S3, 4 MB flash — POC OTA partition table.
+# ESP32-S3, 4 MB flash — UNIFIED factory + A/B OTA (shared with the factory/recovery
+# project: one bootloader + one partition table on the device).
 #
-# POC-minimal on purpose: two equal app slots + otadata, NO factory/recovery
-# image (that recovery image, captive portal and A/B identity re-key are a
-# separate product concern and explicitly out of scope here).
+# `factory` (0xA0000 / 640 KB) holds the SMALL recovery image (intentionally minimized
+# to fit). The MAIN app (~955 KB) does NOT fit factory and lives in ota_0/ota_1
+# (1.56 MB). PlatformIO would normally size/flash the main app against `factory` and
+# fail — so the main-app build sets `board_build.app_partition_name = ota_0` (size
+# check vs ota_0) + a post-script points the flash offset at ota_0. Booting ota_0 also
+# needs otadata pointed there: see scripts/flash-main-app.sh (esptool + otatool).
 #
-# Rollback requires: an `otadata` partition + two `app` slots (ota_0/ota_1).
-# First esptool flash lands in ota_0 and boots as the default app (otadata is
-# empty -> state UNDEFINED, so it is NOT treated as a trial image). Only an
-# OTA-delivered image boots as PENDING_VERIFY and must self-test to commit.
-#
-# Where hardening would slot in later (kept OFF for dev units):
-#   * Secure Boot v2 / Flash Encryption -> burned via eFuse, no table change.
-#   * esp_secure_cert (DS peripheral)    -> the commented partition below.
+# `encrypted` on coredump + esp_secure_cert: no-op while Flash Encryption is off; when
+# FE is enabled (CONFIG_SECURE_FLASH_ENC_ENABLED) those data partitions get encrypted
+# at rest. App/bootloader/otadata are auto-encrypted; nvs/storage (NVS) can't use the
+# flag (need CONFIG_NVS_ENCRYPTION instead).
 #
 # Name,            Type, SubType,  Offset,    Size,      Flags
-nvs,               data, nvs,      0x9000,    0x6000,
-otadata,           data, ota,      0xF000,    0x2000,
-phy_init,          data, phy,      0x11000,   0x1000,
-# esp_secure_cert, 0x3F, 0x06,     0x12000,   0x2000,   # (placeholder) DS-peripheral creds — unused in POC
-ota_0,             app,  ota_0,    0x20000,   0x190000,
-ota_1,             app,  ota_1,    0x1B0000,  0x190000,
-storage,           data, nvs,      0x340000,  0x10000,
-coredump,          data, coredump, 0x350000,  0x10000,
+nvs,               data, nvs,      0x9000,    0x4000,
+otadata,           data, ota,      0xD000,    0x2000,
+phy_init,          data, phy,      0xF000,    0x1000,
+factory,           app,  factory,  0x10000,   0xA0000,
+ota_0,             app,  ota_0,    0xB0000,   0x190000,
+ota_1,             app,  ota_1,    0x240000,  0x190000,
+esp_secure_cert,   0x3F, 0x06,     0x3D0000,  0x2000,    encrypted
+storage,           data, nvs,      0x3D2000,  0x10000,
+coredump,          data, coredump, 0x3E2000,  0x10000,   encrypted

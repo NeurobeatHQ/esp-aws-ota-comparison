@@ -2,5 +2,6 @@
 .DS_Store
 *.swp
 *~
+master-certs
 
 # Per-directory build output is ignored in esp/.gitignore and aws-iot/.gitignore.
