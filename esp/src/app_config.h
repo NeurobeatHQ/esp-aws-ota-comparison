@@ -33,6 +33,10 @@
 #ifndef APP_VERSION_BUILD
     #define APP_VERSION_BUILD    0
 #endif
+/* Monotonic integer build number, reported to the Device Shadow (swVersion) so the
+ * fleet index can be queried numerically (`swVersion < N`) — dodges the lexicographic
+ * "0.10" < "0.3" trap. Index it as a Number custom field (scripts/enable-fleet-indexing.sh). */
+#define APP_VERSION_INT    (APP_VERSION_MAJOR * 10000 + APP_VERSION_MINOR * 100 + APP_VERSION_BUILD)
 #ifndef FW_SELFTEST_SHOULD_PASS
     #define FW_SELFTEST_SHOULD_PASS    1
 #endif

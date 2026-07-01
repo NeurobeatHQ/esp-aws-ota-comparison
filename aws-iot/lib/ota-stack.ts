@@ -66,6 +66,10 @@ export class Esp32OtaStack extends Stack {
       pub.push(`arn:aws:iot:${region}:${account}:topic/$aws/things/${thingVar}/streams/*`);
       sub.push(`arn:aws:iot:${region}:${account}:topicfilter/$aws/things/${thingVar}/streams/*`);
     }
+    // Classic Device Shadow (all backends): the device reports its firmware version
+    // (swVersion) here; fleet indexing (REGISTRY_AND_SHADOW) makes it queryable.
+    pub.push(`arn:aws:iot:${region}:${account}:topic/$aws/things/${thingVar}/shadow/*`);
+    sub.push(`arn:aws:iot:${region}:${account}:topicfilter/$aws/things/${thingVar}/shadow/*`);
     // Name is backend-INDEPENDENT: swapping the backend updates this policy's
     // *document* in place, so the device cert (attached out-of-band by the
     // BYO-CA provisioning flow) keeps working — no detach/rename churn.
@@ -101,6 +105,40 @@ export class Esp32OtaStack extends Stack {
       }));
       otaRoleArn = otaRole.roleArn;
     }
+
+    // --- last-seen: cloud-stamped, no device clock ---------------------------
+    // AWS publishes connect/disconnect lifecycle events to
+    // $aws/events/presence/{connected,disconnected}/<clientId>. This rule stamps an
+    // AWS-sourced timestamp() into each thing's classic shadow (reported.lastSeen +
+    // lastEvent), giving the fleet index a durable "last seen" even for devices dormant
+    // for months (fleet-index connectivity.timestamp is dropped after ~1h offline). No
+    // SNTP on the device. ONE rule serves the whole fleet — it matches every thing's
+    // presence event and republishes to that thing's shadow via ${topic(5)} = clientId.
+    const presenceRole = new iam.Role(this, 'PresenceToShadowRole', {
+      roleName: `${thingName}-presence-role`,
+      assumedBy: new iam.ServicePrincipal('iot.amazonaws.com'),
+    });
+    presenceRole.addToPolicy(new iam.PolicyStatement({
+      actions: ['iot:Publish'],
+      resources: [`arn:aws:iot:${region}:${account}:topic/$aws/things/*/shadow/update`],
+    }));
+    new iot.CfnTopicRule(this, 'PresenceToShadow', {
+      ruleName: `${thingName.replace(/[^A-Za-z0-9_]/g, '_')}_presence_to_shadow`,
+      topicRulePayload: {
+        awsIotSqlVersion: '2016-03-23',
+        // topic(4) = connected|disconnected, topic(5) = clientId (= Thing name).
+        sql: "SELECT timestamp() AS state.reported.lastSeen, topic(4) AS state.reported.lastEvent FROM '$aws/events/presence/+/+'",
+        actions: [{
+          republish: {
+            roleArn: presenceRole.roleArn,
+            // Single-quoted so JS does NOT interpolate ${topic(5)} — it's an IoT
+            // substitution template. $$ escapes the reserved $aws shadow topic.
+            topic: '$$aws/things/${topic(5)}/shadow/update',
+            qos: 0,
+          },
+        }],
+      },
+    });
 
     // --- outputs (consumed by scripts/_lib.sh) -------------------------------
     new CfnOutput(this, 'Backend', { value: backend });

@@ -45,6 +45,18 @@ static void on_connection(bool connected)
     int n = snprintf(birth, sizeof(birth), "{\"online\":true,\"backend\":\"%s\",\"fw\":\"%d.%d.%d\"}",
                      device_iot_backend_name(), APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_BUILD);
     device_iot_publish("status", birth, (size_t)n, 1);
+
+    /* Report the firmware version into the classic Device Shadow so the fleet index is
+     * queryable by a NUMERIC version (swVersion). "last seen" is stamped separately by a
+     * cloud IoT rule on presence events (AWS-sourced time), so nothing here needs a clock. */
+    char shadow[176];
+    int m = snprintf(shadow, sizeof(shadow),
+                     "{\"state\":{\"reported\":{\"swVersion\":%d,\"swVersionStr\":\"%d.%d.%d\",\"backend\":\"%s\"}}}",
+                     APP_VERSION_INT, APP_VERSION_MAJOR, APP_VERSION_MINOR, APP_VERSION_BUILD,
+                     device_iot_backend_name());
+    char shadow_topic[96];
+    snprintf(shadow_topic, sizeof(shadow_topic), "$aws/things/%s/shadow/update", device_iot_thing_name());
+    device_iot_publish_topic(shadow_topic, shadow, (size_t)m, 1);
 }
 
 void app_main(void)
